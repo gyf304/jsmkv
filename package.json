@@ -1,0 +1,12 @@
+{
+  "name": "jsmkv",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/web": "^0.0.126",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
