@@ -3,6 +3,14 @@ export interface BYOBlobData {
 	get(start: number, end: number): Promise<ArrayBuffer>;
 }
 
+export interface BlobLike {
+	readonly size: number;
+	slice(start?: number, end?: number, contentType?: string): BlobLike;
+	arrayBuffer(): Promise<ArrayBuffer>;
+	text(): Promise<string>;
+	stream(): ReadableStream<Uint8Array>;
+}
+
 export class BYOBlob {
 	private cb: BYOBlobData;
 	private options: BlobPropertyBag;

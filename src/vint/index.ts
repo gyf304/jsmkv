@@ -1,4 +1,6 @@
-export class VInt {
+import { BlobLike } from "../byoblob";
+
+export class Vint {
 	public readonly bytes: Uint8Array;
 
 	constructor(bytes: Uint8Array | ArrayBuffer) {
@@ -9,22 +11,27 @@ export class VInt {
 		return this.bytes.length;
 	}
 
-	public static fromBytes(bytes: Uint8Array | ArrayBuffer): VInt {
+	public static fromBytes(bytes: Uint8Array | ArrayBuffer): Vint {
 		if (bytes instanceof ArrayBuffer) {
 			bytes = new Uint8Array(bytes);
 		}
 		if (bytes.length === 0) {
-			throw new Error("VInt cannot be empty");
+			throw new Error("Vint cannot be empty");
 		}
-		let zeros = VInt.leadingZeros(bytes[0]);
+		let zeros = Vint.leadingZeros(bytes[0]);
 		if (zeros === 8) {
-			throw new Error("VInt cannot be all zeros");
+			throw new Error("Vint cannot be all zeros");
 		}
 		if (bytes.length < 1 + zeros) {
 			console.log("bytes", bytes);
-			throw new Error("VInt is too short");
+			throw new Error("Vint is too short");
 		}
-		return new VInt(bytes.slice(0, 1 + zeros))
+		return new Vint(bytes.slice(0, 1 + zeros))
+	}
+
+	public static async fromBlob(blob: BlobLike): Promise<Vint> {
+		const buffer = await blob.slice(0, 8).arrayBuffer();
+		return Vint.fromBytes(new Uint8Array(buffer));
 	}
 
 	public getBytes(): Uint8Array {
@@ -32,7 +39,7 @@ export class VInt {
 	}
 
 	public toBigInt(): bigint {
-		let zeros = VInt.leadingZeros(this.bytes[0]);
+		let zeros = Vint.leadingZeros(this.bytes[0]);
 		let i = BigInt(this.bytes[0] & (0x7f >> zeros));
 		for (let o = 1; o < this.bytes.length; o++) {
 			i = (i << 8n) | BigInt(this.bytes[o]);
@@ -45,7 +52,7 @@ export class VInt {
 	}
 
 	public toNumber(): number {
-		let zeros = VInt.leadingZeros(this.bytes[0]);
+		let zeros = Vint.leadingZeros(this.bytes[0]);
 		let i = this.bytes[0] & (0x7f >> zeros);
 		for (let o = 1; o < this.bytes.length; o++) {
 			i = (i << 8) | this.bytes[o];
@@ -74,7 +81,7 @@ export class VInt {
 	}
 
 	public get valid(): boolean {
-		let zeros = VInt.leadingZeros(this.bytes[0]);
+		let zeros = Vint.leadingZeros(this.bytes[0]);
 		if (zeros === 8) {
 			return false;
 		}
@@ -85,7 +92,7 @@ export class VInt {
 	}
 
 	public get unknown(): boolean {
-		let zeros = VInt.leadingZeros(this.bytes[0]);
+		let zeros = Vint.leadingZeros(this.bytes[0]);
 		if (this.bytes[0] !== (0xff >> zeros)) {
 			return false;
 		}
@@ -97,32 +104,32 @@ export class VInt {
 		return true;
 	}
 
-	public static fromBigInt(i: bigint): VInt {
+	public static fromBigInt(i: bigint): Vint {
 		if (i === 0n) {
-			return new VInt(new Uint8Array(1));
+			return new Vint(new Uint8Array(1));
 		}
-		let byteLen = Math.ceil(VInt.bitLength(i) / 7);
+		let byteLen = Math.ceil(Vint.bitLength(i) / 7);
 		let bytes = new Uint8Array(byteLen);
 		for (let cur = byteLen - 1; i > 0; cur--) {
 			bytes[cur] = Number(i & 0xffn);
 			i >>= 8n;
 		}
 		bytes[0] |= 0x80 >> (byteLen - 1);
-		return new VInt(bytes);
+		return new Vint(bytes);
 	}
 
-	public static fromNumber(i: number): VInt {
+	public static fromNumber(i: number): Vint {
 		if (i === 0) {
-			return new VInt(new Uint8Array(1));
+			return new Vint(new Uint8Array(1));
 		}
-		let byteLen = Math.ceil(VInt.bitLength(BigInt(i)) / 7);
+		let byteLen = Math.ceil(Vint.bitLength(BigInt(i)) / 7);
 		let bytes = new Uint8Array(byteLen);
 		for (let cur = byteLen - 1; i > 0; cur--) {
 			bytes[cur] = i & 0xff;
 			i >>= 8;
 		}
 		bytes[0] |= 0x80 >> (byteLen - 1);
-		return new VInt(bytes);
+		return new Vint(bytes);
 	}
 
 	private static leadingZeros(byte: number): number {
