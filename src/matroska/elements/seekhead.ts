@@ -1,5 +1,5 @@
 import type { Segment } from "./index.js";
-import * as ebml from "../../ebml";
+import * as ebml from "../../ebml/index.js";
 
 export class Seek extends ebml.SchemaElement {
 	public static readonly id = 0x4dbb;

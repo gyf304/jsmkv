@@ -1,6 +1,6 @@
 import type { Segment } from "./index.js";
-import * as ebml from "../../ebml";
-import { Vint } from "../../vint";
+import * as ebml from "../../ebml/index.js";
+import { Vint } from "../../vint/index.js";
 
 export class Cluster extends ebml.SchemaElement {
 	public static readonly id = 0x1f43b675;

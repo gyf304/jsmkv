@@ -1,4 +1,4 @@
-import { BlobLike } from "../byoblob";
+import { BlobLike } from "../bloblike";
 
 export class Vint {
 	public readonly bytes: Uint8Array;

@@ -1,4 +1,4 @@
-import * as ebml from "../../ebml";
+import * as ebml from "../../ebml/index.js";
 
 import { Cluster } from "./cluster.js";
 import { Cues } from "./cues.js";

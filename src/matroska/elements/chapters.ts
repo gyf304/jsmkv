@@ -1,5 +1,5 @@
 import type { Segment } from "./index.js";
-import * as ebml from "../../ebml";
+import * as ebml from "../../ebml/index.js";
 
 export class Chapters extends ebml.SchemaElement {
 	public static readonly id = 0x1043a770;

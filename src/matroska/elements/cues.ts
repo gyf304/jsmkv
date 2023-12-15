@@ -1,5 +1,5 @@
 import type { Segment } from "./index.js";
-import * as ebml from "../../ebml";
+import * as ebml from "../../ebml/index.js";
 import { Cluster } from "./cluster.js";
 
 export class Cues extends ebml.SchemaElement {

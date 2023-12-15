@@ -1,7 +1,7 @@
 import * as ebml from "../ebml";
 import * as elements from "./elements";
 
-export class MKV extends ebml.SchemaStream {
+export class File extends ebml.SchemaStream {
 	public static readonly knownChildren = [elements.EBMLHead, elements.Segment];
 
 	constructor(public readonly stream: ebml.Stream) {
