@@ -51,69 +51,40 @@ export class TrackEntry extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getTrackNumber(): Promise<TrackNumber> {
-		for await (const child of this.element.children) {
-			if (child.id.id === TrackNumber.id) {
-				return new TrackNumber(child, this);
-			}
-		}
-		throw new Error("TrackNumber not found");
+	public get trackNumber() {
+		return this.one(TrackNumber).then(v => v.value);
 	}
 
-	public get trackNumber(): Promise<TrackNumber> {
-		return this.getTrackNumber();
+	public get trackUID() {
+		return this.one(TrackUID).then(v => v.value);
 	}
 
-	private async getTrackUID(): Promise<TrackUID> {
-		for await (const child of this.element.children) {
-			if (child.id.id === TrackUID.id) {
-				return new TrackUID(child, this);
-			}
-		}
-		throw new Error("TrackUID not found");
+	public get trackType() {
+		return this.one(TrackType).then(v => v.value);
 	}
 
-	public get trackUID(): Promise<TrackUID> {
-		return this.getTrackUID();
+	public get defaultDuration() {
+		return this.maybeOne(DefaultDuration).then(v => v === undefined ? undefined : v.value);
 	}
 
-	private async getTrackType(): Promise<TrackType> {
-		for await (const child of this.element.children) {
-			if (child.id.id === TrackType.id) {
-				return new TrackType(child, this);
-			}
-		}
-		throw new Error("TrackType not found");
+	public get trackName() {
+		return this.maybeOne(Name).then(v => v === undefined ? undefined : v.value);
 	}
 
-	public get trackType(): Promise<TrackType> {
-		return this.getTrackType();
+	public get language() {
+		return this.maybeOne(Language).then(v => v === undefined ? undefined : v.value);
 	}
 
-	private async getDefaultDuration(): Promise<DefaultDuration | undefined> {
-		for await (const child of this.element.children) {
-			if (child.id.id === DefaultDuration.id) {
-				return new DefaultDuration(child, this);
-			}
-		}
-		return undefined;
+	public get codecID() {
+		return this.one(CodecID).then(v => v.value);
 	}
 
-	public get defaultDuration(): Promise<DefaultDuration | undefined> {
-		return this.getDefaultDuration();
+	public get video() {
+		return this.maybeOne(Video);
 	}
 
-	private async getTrackName(): Promise<Name | undefined> {
-		for await (const child of this.element.children) {
-			if (child.id.id === Name.id) {
-				return new Name(child, this);
-			}
-		}
-		return undefined;
-	}
-
-	public get trackName(): Promise<Name | undefined> {
-		return this.getTrackName();
+	public get audio() {
+		return this.maybeOne(Audio);
 	}
 }
 
@@ -262,56 +233,20 @@ export class Video extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getPixelWidth(): Promise<PixelWidth> {
-		for await (const child of this.element.children) {
-			if (child.id.id === PixelWidth.id) {
-				return new PixelWidth(child, this);
-			}
-		}
-		throw new Error("PixelWidth not found");
+	public get pixelWidth() {
+		return this.one(PixelWidth).then(v => v.value);
 	}
 
-	public get pixelWidth(): Promise<PixelWidth> {
-		return this.getPixelWidth();
+	public get pixelHeight() {
+		return this.one(PixelHeight).then(v => v.value);
 	}
 
-	private async getPixelHeight(): Promise<PixelHeight> {
-		for await (const child of this.element.children) {
-			if (child.id.id === PixelHeight.id) {
-				return new PixelHeight(child, this);
-			}
-		}
-		throw new Error("PixelHeight not found");
+	public get displayWidth() {
+		return this.one(DisplayWidth).then(v => v.value);
 	}
 
-	public get pixelHeight(): Promise<PixelHeight> {
-		return this.getPixelHeight();
-	}
-
-	private async getDisplayWidth(): Promise<DisplayWidth | undefined> {
-		for await (const child of this.element.children) {
-			if (child.id.id === DisplayWidth.id) {
-				return new DisplayWidth(child, this);
-			}
-		}
-		return undefined;
-	}
-
-	public get displayWidth(): Promise<DisplayWidth | undefined> {
-		return this.getDisplayWidth();
-	}
-
-	private async getDisplayHeight(): Promise<DisplayHeight | undefined> {
-		for await (const child of this.element.children) {
-			if (child.id.id === DisplayHeight.id) {
-				return new DisplayHeight(child, this);
-			}
-		}
-		return undefined;
-	}
-
-	public get displayHeight(): Promise<DisplayHeight | undefined> {
-		return this.getDisplayHeight();
+	public get displayHeight() {
+		return this.one(DisplayHeight).then(v => v.value);
 	}
 }
 
@@ -367,30 +302,12 @@ class Audio extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getSamplingFrequency(): Promise<SamplingFrequency> {
-		for await (const child of this.element.children) {
-			if (child.id.id === SamplingFrequency.id) {
-				return new SamplingFrequency(child, this);
-			}
-		}
-		throw new Error("SamplingFrequency not found");
+	public get samplingFrequency() {
+		return this.one(SamplingFrequency).then(v => v.value);
 	}
 
-	public get samplingFrequency(): Promise<SamplingFrequency> {
-		return this.getSamplingFrequency();
-	}
-
-	private async getChannels(): Promise<Channels> {
-		for await (const child of this.element.children) {
-			if (child.id.id === Channels.id) {
-				return new Channels(child, this);
-			}
-		}
-		throw new Error("Channels not found");
-	}
-
-	public get channels(): Promise<Channels> {
-		return this.getChannels();
+	public get channels() {
+		return this.one(Channels).then(v => v.value);
 	}
 }
 

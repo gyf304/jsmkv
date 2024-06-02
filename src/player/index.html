@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Player</title>
+	</head>
+	<body>
+		<h1>Player</h1>
+		<input type="file" id="file" accept=".mkv" />
+		<video id="video" controls></video>
+		<script type="module">
+			import { MKVVideoPlayer } from "./index.js";
+			const fileInput = document.getElementById("file");
+			const video = document.getElementById("video");
+			file.addEventListener("change", () => {
+				const file = fileInput.files[0];
+				const player = new MKVVideoPlayer(file);
+				player.attach(video);
+			});
+		</script>
+	</body>
+</html>

@@ -2,6 +2,7 @@ import { File } from "./matroska";
 import * as mkve from "./matroska/elements";
 import * as ebml from "./ebml";
 import { BlobLike, FetchBlobLike } from "./bloblike";
+import { MKVVideoPlayer } from "./player";
 
 const mkvFilePath = Bun.argv[2];
 let mkvFile: BlobLike;
@@ -13,10 +14,16 @@ if (mkvFilePath.startsWith("http://") || mkvFilePath.startsWith("https://")) {
 
 const stream = new ebml.Stream(mkvFile);
 const mkv = new File(stream);
+const segment = await mkv.one(mkve.Segment, { before: mkve.Cluster });
 
-const block = await mkv.one(mkve.Segment).then(s => s.one(mkve.Cluster)).then(c => c.one(mkve.SimpleBlock));
 const writer = Bun.stdout.writer();
-for await (const data of block.frameData) {
-	writer.write(data);
+for await (const cluster of segment.clusters) {
+	for await (const block of cluster.simpleBlocks) {
+		const trackNumber = await block.trackNumber;
+		if (trackNumber === 1) {
+			const data = await block.data;
+			await writer.write(data);
+		}
+	}
 }
 await writer.flush();

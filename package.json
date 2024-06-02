@@ -16,6 +16,7 @@
     "cli": "bun src/cli.ts"
   },
   "dependencies": {
-    "lru-cache": "^10.2.2"
+    "lru-cache": "^10.2.2",
+    "mp4-muxer": "link:mp4-muxer"
   }
 }

@@ -113,16 +113,16 @@ export abstract class SchemaElement {
 		return s.children;
 	}
 
-	public maybeOne<T extends typeof SchemaElement>(cls: T): Promise<New<T> | undefined> {
-		return this.stream.maybeOne(cls);
+	public maybeOne<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
+		return this.stream.maybeOne(cls, options);
 	}
 
-	public one<T extends typeof SchemaElement>(cls: T): Promise<New<T>> {
-		return this.stream.one(cls);
+	public one<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T>> {
+		return this.stream.one(cls, options);
 	}
 
-	public many<T extends typeof SchemaElement>(cls: T): AsyncGenerator<New<T>> {
-		return this.stream.many(cls);
+	public many<T extends typeof SchemaElement>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
+		return this.stream.many(cls, options);
 	}
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
@@ -191,7 +191,7 @@ export abstract class UTF8Element extends SchemaElement {
 		}
 		const data = await this.element.data.arrayBuffer();
 		const decoder = new TextDecoder();
-		const text = decoder.decode(data);
+		const text = decoder.decode(data).replace(/\0.*$/g, "");
 		this.cachedValue = text;
 		return text;
 	}
@@ -246,7 +246,19 @@ export abstract class FloatElement extends SchemaElement {
 		}
 		const data = await this.element.data.arrayBuffer();
 		const view = new DataView(data);
-		this.cachedValue = view.getFloat64(0);
+		switch (data.byteLength) {
+			case 0:
+				this.cachedValue = 0;
+				break;
+			case 4:
+				this.cachedValue = view.getFloat32(0);
+				break;
+			case 8:
+				this.cachedValue = view.getFloat64(0);
+				break;
+			default:
+				throw new Error("Invalid float size");
+		}
 		return this.cachedValue;
 	}
 
@@ -322,6 +334,15 @@ export abstract class VintElement extends SchemaElement {
 	public get value(): Promise<Vint> {
 		return this.getValue();
 	}
+
+	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
+		const vint = await this.getValue();
+		return [`${curIndent}<${this.constructor.name}>${vint.number}</${this.constructor.name}>\n`];
+	}
+}
+
+interface FindOptions {
+	before?: typeof SchemaElement;
 }
 
 export abstract class SchemaStream {
@@ -366,8 +387,11 @@ export abstract class SchemaStream {
 		return this.childrenGenerator();
 	}
 
-	public async maybeOne<T extends typeof SchemaElement>(cls: T): Promise<New<T> | undefined> {
+	public async maybeOne<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
 		for await (const child of this.stream.children) {
+			if (child.id.id === options?.before?.id) {
+				break;
+			}
 			if (child.id.id === cls.id) {
 				if (cls === SchemaElement) {
 					throw new Error("Cannot use SchemaElement as a type");
@@ -377,21 +401,23 @@ export abstract class SchemaStream {
 		}
 	}
 
-	public async one<T extends typeof SchemaElement>(cls: T): Promise<New<T>> {
-		const result = await this.maybeOne(cls);
+	public async one<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T>> {
+		const result = await this.maybeOne(cls, options);
 		if (result === undefined) {
 			throw new Error(`Expected ${cls.name}`);
 		}
 		return result;
 	}
 
-	public async *many<T extends typeof SchemaElement>(cls: T): AsyncGenerator<New<T>> {
+	public async *many<T extends typeof SchemaElement>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
 		for await (const child of this.stream.children) {
 			if (child.id.id === cls.id) {
 				if (cls === SchemaElement) {
 					throw new Error("Cannot use SchemaElement as a type");
 				}
 				yield new (cls as unknown as any)(child, this.parent);
+			} else if (child.id.id === options?.before?.id) {
+				break;
 			}
 		}
 	}

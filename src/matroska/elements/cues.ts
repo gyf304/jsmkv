@@ -39,17 +39,8 @@ export class CuePoint extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getCueTime(): Promise<CueTime> {
-		for await (const child of this.element.children) {
-			if (child.id.id === CueTime.id) {
-				return new CueTime(child, this);
-			}
-		}
-		throw new Error("CueTime not found");
-	}
-
-	public get cueTime(): Promise<CueTime> {
-		return this.getCueTime();
+	public get cueTime() {
+		return this.one(CueTime).then(v => v.value);
 	}
 
 	private async *cueTrackPositionsGenerator(): AsyncGenerator<CueTrackPositions> {
@@ -65,7 +56,7 @@ export class CuePoint extends ebml.SchemaElement {
 	}
 }
 
-export class CueTime extends ebml.VintElement {
+export class CueTime extends ebml.UintElement {
 	public static readonly id = 0xb3;
 	public static readonly level = 3;
 	public static readonly name = "CueTime";
@@ -86,31 +77,12 @@ export class CueTrackPositions extends ebml.SchemaElement {
 	constructor(public readonly element: ebml.Element, public readonly parent: CuePoint) {
 		super(element);
 	}
-
-	private async getCueTrack(): Promise<CueTrack> {
-		for await (const child of this.element.children) {
-			if (child.id.id === CueTrack.id) {
-				return new CueTrack(child, this);
-			}
-		}
-		throw new Error("CueTrack not found");
+	public get cueTrack() {
+		return this.one(CueTrack).then(v => v.value);
 	}
 
-	public get cueTrack(): Promise<CueTrack> {
-		return this.getCueTrack();
-	}
-
-	private async getCueClusterPosition(): Promise<CueClusterPosition> {
-		for await (const child of this.element.children) {
-			if (child.id.id === CueClusterPosition.id) {
-				return new CueClusterPosition(child, this);
-			}
-		}
-		throw new Error("CueClusterPosition not found");
-	}
-
-	public get cueClusterPosition(): Promise<CueClusterPosition> {
-		return this.getCueClusterPosition();
+	public get cueClusterPosition() {
+		return this.one(CueClusterPosition).then(v => v.value);
 	}
 }
 

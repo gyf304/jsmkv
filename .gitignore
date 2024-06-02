@@ -180,3 +180,4 @@ dist
 *.mp4
 ./*.xml
 *.dump.txt
+*.bin

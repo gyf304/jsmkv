@@ -14,29 +14,12 @@ export class Cluster extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getTimecode(): Promise<Timestamp> {
-		for await (const child of this.element.children) {
-			if (child.id.id === Timestamp.id) {
-				return Promise.resolve(new Timestamp(child, this));
-			}
-		}
-		throw new Error("Timestamp not found");
+	public get timestamp() {
+		return this.one(Timestamp).then(e => e.value);
 	}
 
-	public get timecode(): Promise<Timestamp> {
-		return this.getTimecode();
-	}
-
-	private async *simpleBlocksGenerator(): AsyncGenerator<SimpleBlock> {
-		for await (const child of this.element.children) {
-			if (child.id.id === SimpleBlock.id) {
-				yield new SimpleBlock(child, this);
-			}
-		}
-	}
-
-	public get simpleBlocks(): AsyncGenerator<SimpleBlock> {
-		return this.simpleBlocksGenerator();
+	public get simpleBlocks() {
+		return this.many(SimpleBlock);
 	}
 }
 
@@ -94,9 +77,8 @@ export class SimpleBlock extends ebml.SchemaElement {
 		const tnSize = this.cachedTrackNumberSize!;
 		// 2-byte timestamp
 		const bytes = await this.element.data.slice(tnSize, tnSize + 2).arrayBuffer();
-		const u8 = new Uint8Array(bytes);
-		// big-endian
-		this.cachedTimestamp = u8[0] << 8 | u8[1];
+		const view = new DataView(bytes);
+		this.cachedTimestamp = view.getUint16(0, false);
 		return this.cachedTimestamp;
 	}
 
@@ -165,18 +147,13 @@ export class SimpleBlock extends ebml.SchemaElement {
 		}
 		const prevSize = this.cachedTrackNumberSize! + 2 + 1;
 		const blob = this.element.data.slice(prevSize);
-		if (lacing === "Xiph" || lacing === "fixed-size") {
+		if (lacing === "Xiph" || lacing === "fixed-size" || lacing === "EBML") {
 			const u8 = new Uint8Array(await blob.slice(0, 1).arrayBuffer());
 			if (u8.length === 0) {
 				throw new Error("Invalid Xiph lacing");
 			}
 			this.cachedFrameCount = u8[0] + 1;
 			this.cachedFrameCountSize = 1;
-			return this.cachedFrameCount;
-		} else if (lacing === "EBML") {
-			const vint = await Vint.fromBlob(blob);
-			this.cachedFrameCount = vint.number + 1;
-			this.cachedFrameCountSize = vint.size;
 			return this.cachedFrameCount;
 		} else {
 			throw new Error(`Invalid lacing value: ${lacing}`);
@@ -190,6 +167,9 @@ export class SimpleBlock extends ebml.SchemaElement {
 	private cachedFrameSizes?: number[];
 	private cachedFrameSizesSize?: number;
 	private async getFrameSizes(): Promise<number[]> {
+		const tn = await this.trackNumber;
+		const ts = await this.timestamp;
+		// console.log("getFrameSizes", tn, ts);
 		if (this.cachedFrameSizes) {
 			return this.cachedFrameSizes;
 		}
@@ -254,7 +234,7 @@ export class SimpleBlock extends ebml.SchemaElement {
 		}
 	}
 
-	public get frameData(): AsyncGenerator<Uint8Array> {
+	public get frames(): AsyncGenerator<Uint8Array> {
 		return (async function* (this: SimpleBlock) {
 			const sizes = await this.getFrameSizes();
 			let offset = this.cachedTrackNumberSize! + this.cachedTimestampSize
@@ -266,5 +246,19 @@ export class SimpleBlock extends ebml.SchemaElement {
 				offset += size;
 			}
 		}).bind(this)();
+	}
+
+	public get data(): Promise<ArrayBuffer> {
+		return this.getFrameSizes().then(sizes => {
+			const sizeSum = sizes.reduce((sum, size) => sum + size, 0);
+			let offset = this.cachedTrackNumberSize! + this.cachedTimestampSize
+				+ this.cachedHeaderFlagsSize + this.cachedFrameCountSize!
+				+ this.cachedFrameSizesSize!;
+			return this.element.data.slice(offset, offset + sizeSum).arrayBuffer();
+		});
+	}
+
+	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
+		return [`${curIndent}<${this.constructor.name} track="${await this.trackNumber}" timestamp="${await this.timestamp}" framesizes="${JSON.stringify(await this.getFrameSizes())}" />\n`];
 	}
 }

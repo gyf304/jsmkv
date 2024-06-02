@@ -46,7 +46,7 @@ export class Vint {
 		return i;
 	}
 
-	public get bigInt(): bigint {
+	public get bigint(): bigint {
 		return this.toBigInt();
 	}
 

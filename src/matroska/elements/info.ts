@@ -12,6 +12,14 @@ export class Info extends ebml.SchemaElement {
 	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
 		super(element);
 	}
+
+	public get timestampScale(): Promise<number> {
+		return this.one(TimestampScale).then(e => e.value);
+	}
+
+	public get duration(): Promise<number> {
+		return this.one(Duration).then(e => e.value);
+	}
 }
 
 export class TimestampScale extends ebml.UintElement {

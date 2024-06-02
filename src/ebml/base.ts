@@ -23,7 +23,7 @@ export class Element {
 		const buffer = await sliced.arrayBuffer();
 		const idVint = Vint.fromBytes(new Uint8Array(buffer));
 		const sizeVint = Vint.fromBytes(new Uint8Array(buffer.slice(idVint.size)));
-		const size = sizeVint.bigInt;
+		const size = sizeVint.bigint;
 		const dataStart = idVint.size + sizeVint.size;
 		const dataEnd = dataStart + Number(size);
 		const dataBlob = blob.slice(dataStart, dataEnd);
