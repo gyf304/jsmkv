@@ -189,13 +189,20 @@ export abstract class UTF8Element extends SchemaElement {
 		if (this.cachedValue !== undefined) {
 			return this.cachedValue;
 		}
-		const data = await this.element.data.text();
-		this.cachedValue = data;
-		return data;
+		const data = await this.element.data.arrayBuffer();
+		const decoder = new TextDecoder();
+		const text = decoder.decode(data);
+		this.cachedValue = text;
+		return text;
 	}
 
 	public get value(): Promise<string> {
 		return this.getValue();
+	}
+
+	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
+		const text = await this.getValue();
+		return [`${curIndent}<${this.constructor.name}>${text}</${this.constructor.name}>\n`]; // TODO: proper escaping
 	}
 }
 
@@ -221,6 +228,36 @@ export abstract class UintElement extends SchemaElement {
 	public get value(): Promise<number> {
 		return this.getValue();
 	}
+
+	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
+		const n = await this.getValue();
+		return [`${curIndent}<${this.constructor.name}>${n}</${this.constructor.name}>\n`];
+	}
+}
+
+export abstract class FloatElement extends SchemaElement {
+	public static readonly leaf = true;
+
+	private cachedValue?: number;
+
+	private async getValue(): Promise<number> {
+		if (this.cachedValue !== undefined) {
+			return this.cachedValue;
+		}
+		const data = await this.element.data.arrayBuffer();
+		const view = new DataView(data);
+		this.cachedValue = view.getFloat64(0);
+		return this.cachedValue;
+	}
+
+	public get value(): Promise<number> {
+		return this.getValue();
+	}
+
+	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
+		const n = await this.getValue();
+		return [`${curIndent}<${this.constructor.name}>${n}</${this.constructor.name}>\n`];
+	}
 }
 
 export class VoidElement extends SchemaElement {
@@ -229,6 +266,23 @@ export class VoidElement extends SchemaElement {
 
 	public get value(): Promise<void> {
 		return Promise.resolve();
+	}
+}
+
+export class Crc32Element extends SchemaElement {
+	public static readonly id = 0xbf;
+	public static readonly name = "CRC-32";
+	public static readonly leaf = true;
+
+	private async getValue(): Promise<number> {
+		// 4 bytes
+		const data = await this.element.data.arrayBuffer();
+		const view = new DataView(data);
+		return view.getUint32(0);
+	}
+
+	public get value(): Promise<number> {
+		return this.getValue();
 	}
 }
 
@@ -300,6 +354,8 @@ export abstract class SchemaStream {
 				yield new (childConstructor as unknown as any)(child, this as any); // TODO: Fix this
 			} else if ( id === VoidElement.id ) {
 				yield new VoidElement(child, this.parent);
+			} else if ( id === Crc32Element.id ) {
+				yield new Crc32Element(child, this.parent);
 			} else {
 				yield new UnknownElement(child, this.parent);
 			}

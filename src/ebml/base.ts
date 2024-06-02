@@ -1,32 +1,8 @@
-import { BlobLike } from "../bloblike.js";
+import { BlobLike } from "../bloblike";
 import { Vint } from "../vint";
 
-interface AllOptions {
-	/* cache data up to this size in bytes, or explicitly enable / disable caching */
-	cache: boolean | number;
-}
-
-const defaultOptions: AllOptions = {
-	cache: 1000000, // cache data up to 1MB
-};
-
-type Options = Partial<AllOptions>;
-
-function shouldCache(blob: BlobLike, options: AllOptions): boolean {
-	if (options.cache === false) {
-		return false;
-	}
-	if (typeof options.cache === "number" && blob.size > options.cache) {
-		return false;
-	}
-	return true;
-}
-
 export class Element {
-	public readonly options: AllOptions;
-
-	constructor(public readonly id: Vint, public readonly dataSize: Vint, public readonly data: BlobLike, options?: Options) {
-		this.options = {...defaultOptions, ...options};
+	constructor(public readonly id: Vint, public readonly dataSize: Vint, public readonly data: BlobLike) {
 	}
 
 	public get size(): number {
@@ -34,14 +10,14 @@ export class Element {
 	}
 
 	public get stream(): Stream {
-		return new Stream(this.data, this.options);
+		return new Stream(this.data);
 	}
 
 	public get children(): AsyncGenerator<Element> {
 		return this.stream.children;
 	}
 
-	public static async fromBlob(blob: BlobLike, options?: Options): Promise<Element> {
+	public static async fromBlob(blob: BlobLike): Promise<Element> {
 		// read first 16 bytes
 		const sliced = blob.slice(0, Math.min(blob.size, 16));
 		const buffer = await sliced.arrayBuffer();
@@ -51,24 +27,15 @@ export class Element {
 		const dataStart = idVint.size + sizeVint.size;
 		const dataEnd = dataStart + Number(size);
 		const dataBlob = blob.slice(dataStart, dataEnd);
-		return new Element(idVint, sizeVint, dataBlob, options);
+		return new Element(idVint, sizeVint, dataBlob);
 	}
 }
 
 
 export class Stream {
-	public readonly options: AllOptions;
-	public readonly cached: boolean;
-	private readonly blobPromise: Promise<BlobLike>;
 	private cachedChildren: Element[] = [];
 
-	constructor(blob: BlobLike, options?: Options) {
-		this.options = {...defaultOptions, ...options};
-		this.cached = shouldCache(blob, this.options);
-		this.blobPromise = this.cached ?
-			blob.slice(0).arrayBuffer().then((buffer) => new Blob([buffer])) :
-			Promise.resolve(blob);
-	}
+	constructor(private readonly blob: BlobLike) {}
 
 	private get cachedChildrenSize(): number {
 		return this.cachedChildren.reduce((sum, child) => sum + child.size, 0);
@@ -79,15 +46,13 @@ export class Stream {
 			yield cached;
 		}
 		let offset = this.cachedChildrenSize;
-		const blob = await this.blobPromise;
+		const blob = this.blob;
 		while (offset < blob.size) {
 			const element = await Element.fromBlob(
 				blob.slice(offset),
-				{ ...this.options, cache: this.cached ? false : this.options.cache },
 			);
 			this.cachedChildren.push(element);
 			offset += element.size;
-			// console.log(element.toString());
 			yield element;
 		}
 		if (offset !== this.cachedChildrenSize) {

@@ -193,6 +193,7 @@ export class SimpleBlock extends ebml.SchemaElement {
 		if (this.cachedFrameSizes) {
 			return this.cachedFrameSizes;
 		}
+		await this.getFrameCount();
 		const lacing = await this.lacing;
 		const prevSize = this.cachedTrackNumberSize! + this.cachedTimestampSize
 			+ this.cachedHeaderFlagsSize + this.cachedFrameCountSize!;
@@ -251,5 +252,19 @@ export class SimpleBlock extends ebml.SchemaElement {
 		} else {
 			throw new Error(`Invalid lacing value: ${lacing}`);
 		}
+	}
+
+	public get frameData(): AsyncGenerator<Uint8Array> {
+		return (async function* (this: SimpleBlock) {
+			const sizes = await this.getFrameSizes();
+			let offset = this.cachedTrackNumberSize! + this.cachedTimestampSize
+				+ this.cachedHeaderFlagsSize + this.cachedFrameCountSize!
+				+ this.cachedFrameSizesSize!;
+			for (const size of sizes) {
+				const data = await this.element.data.slice(offset, offset + size).arrayBuffer();
+				yield new Uint8Array(data);
+				offset += size;
+			}
+		}).bind(this)();
 	}
 }

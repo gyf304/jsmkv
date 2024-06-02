@@ -175,3 +175,8 @@ dist
 .DS_Store
 
 *.xml
+
+*.mkv
+*.mp4
+./*.xml
+*.dump.txt

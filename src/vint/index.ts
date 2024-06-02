@@ -23,7 +23,6 @@ export class Vint {
 			throw new Error("Vint cannot be all zeros");
 		}
 		if (bytes.length < 1 + zeros) {
-			console.log("bytes", bytes);
 			throw new Error("Vint is too short");
 		}
 		return new Vint(bytes.slice(0, 1 + zeros))

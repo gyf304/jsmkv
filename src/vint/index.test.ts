@@ -20,20 +20,23 @@ describe("Vint Tests", () => {
 	});
 });
 
-describe("Vint Range Tests", () => {
-	for (let i = 0n; i < 0x100n; i++) {
-		test(`Testing Vint fromBigInt with value ${i}`, () => {
-			const v = Vint.fromBigInt(i);
-			const i2 = v.toBigInt();
-			expect(i2).toBe(i);
-		});
-	}
+const maxBigInt = 1n << 63n;
+const maxNumber = 0x100000;
 
-	for (let i = 1n; i < 0x100n; i <<= 1n) {
-		test(`Testing Vint fromBigInt with value ${i}`, () => {
+describe("Vint Range Tests", () => {
+	test(`Testing Vint fromBigInt to ${maxBigInt} (shift)`, () => {
+		for (let i = 0x1234n; i < maxBigInt; i <<= 1n) {
 			const v = Vint.fromBigInt(i);
 			const i2 = v.toBigInt();
 			expect(i2).toBe(i);
-		});
-	}
+		}
+	});
+
+	test(`Testing Vint fromNumber to ${maxNumber} (iteration)`, () => {
+		for (let i = 0; i < maxNumber; i++) {
+			const v = Vint.fromNumber(i);
+			const i2 = v.toNumber();
+			expect(i2).toBe(i);
+		}
+	});
 });

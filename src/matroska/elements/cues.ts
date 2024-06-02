@@ -80,7 +80,7 @@ export class CueTrackPositions extends ebml.SchemaElement {
 	public static readonly level = 3;
 	public static readonly name = "CueTrackPositions";
 	public static get knownChildren() {
-		return [CueTrack, CueClusterPosition];
+		return [CueTrack, CueClusterPosition, CueRelativePosition, CueDuration];
 	}
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CuePoint) {
@@ -144,5 +144,25 @@ export class CueClusterPosition extends ebml.UintElement {
 
 	public get referencedElement(): Promise<Cluster> {
 		return this.getReferencedElement();
+	}
+}
+
+export class CueRelativePosition extends ebml.UintElement {
+	public static readonly id = 0xf0;
+	public static readonly level = 4;
+	public static readonly name = "CueRelativePosition";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
+		super(element);
+	}
+}
+
+export class CueDuration extends ebml.UintElement {
+	public static readonly id = 0xb2;
+	public static readonly level = 4;
+	public static readonly name = "CueDuration";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
+		super(element);
 	}
 }

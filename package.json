@@ -3,10 +3,19 @@
   "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
+    "@types/minimist": "^1.2.5",
     "@types/web": "^0.0.126",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "minimist": "^1.2.8",
+    "zod": "^3.22.4"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "cli": "bun src/cli.ts"
+  },
+  "dependencies": {
+    "lru-cache": "^10.2.2"
   }
 }
