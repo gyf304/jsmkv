@@ -67,22 +67,12 @@ function hexString(buffer: ArrayBuffer) {
 }
 
 export class MKVVideoPlayer {
-	private initData?: InitData;
-	private video?: HTMLVideoElement;
-	private mediaSource?: MediaSource;
-	private sourceBuffer?: SourceBuffer;
-	private currentSeekedTime = 0;
-
-	private playerPromise?: Promise<void>;
-	private playerAbortController?: AbortController;
-
-	constructor(private readonly source: BlobLike, private options?: Options) {
+	constructor(private readonly source: BlobLike, private readonly video: HTMLVideoElement, private options?: Options) {
+		this.init();
 	}
 
-	public async init(): Promise<InitData> {
-		if (this.initData !== undefined) {
-			return this.initData;
-		}
+	private async init(): Promise<InitData> {
+		const mp4Timescale = 11520;
 		const stream = new ebml.Stream(this.source);
 		const mkv = new File(stream);
 		const segment = await mkv.one(mkve.Segment, { before: mkve.Cluster });
@@ -107,6 +97,7 @@ export class MKVVideoPlayer {
 		let audioTrackNumber: number | undefined;
 		let audioCodecPrivateData: ArrayBuffer | undefined;
 
+		// parse track data
 		for await (const track of tracks.tracks) {
 			const trackType = await track.trackType;
 			const codecID = await track.codecID;
@@ -116,25 +107,30 @@ export class MKVVideoPlayer {
 					if (video === undefined) {
 						throw new Error("Video not found");
 					}
-					const videoCodec = videoCodecMapping[codecID as keyof typeof videoCodecMapping];
-					if (videoCodec === undefined) {
+					const codec = videoCodecMapping[codecID as keyof typeof videoCodecMapping];
+					if (codec === undefined) {
 						console.warn(`Unsupported video codec: ${codecID}, ignored`);
 						continue;
 					}
+					const trackNumber = await track.trackNumber;
 					const defaultDuration = await track.defaultDuration;
 					if (defaultDuration === undefined) {
 						throw new Error("DefaultDuration not found");
 					}
-					videoOptions = {
-						width: await video.pixelWidth,
-						height: await video.pixelHeight,
-						codec: videoCodec,
-					};
+					const width = await video.pixelWidth;
+					const height = await video.pixelHeight;
 					videoTrackNumber = await track.trackNumber;
 					const codecPrivate = await track.maybeOne(mkve.CodecPrivate);
-					if (codecPrivate !== undefined) {
-						videoCodecPrivateData = await codecPrivate.element.data.arrayBuffer();
+					if (codecPrivate === undefined) {
+						throw new Error("CodecPrivate not found");
 					}
+					const codecPrivateData = await codecPrivate.element.data.arrayBuffer();
+					videoOptions = {
+						codec,
+						width,
+						height,
+					};
+					videoCodecPrivateData = codecPrivateData;
 					break;
 				}
 				case "audio": {
@@ -204,7 +200,15 @@ export class MKVVideoPlayer {
 			}
 		}
 
+		let mimeType: string;
+		if (audioOptions !== undefined) {
+			mimeType = `video/mp4; codecs="${videoMimeCodec}, ${audioMimeCodec}"`;
+		} else {
+			mimeType = `video/mp4; codecs="${videoMimeCodec}"`;
+		}
+
 		console.log("duration", durationSeconds);
+		// create index for seeking
 
 		const seeks: SeekCluster[] = [];
 		for await (const cuePoint of cues.cuePoints) {
@@ -220,34 +224,9 @@ export class MKVVideoPlayer {
 			}
 		}
 
-		let mimeType: string;
-		if (audioOptions !== undefined) {
-			mimeType = `video/mp4; codecs="${videoMimeCodec}, ${audioMimeCodec}"`;
-		} else {
-			mimeType = `video/mp4; codecs="${videoMimeCodec}"`;
-		}
-
-		this.initData = {
-			segment,
-			timestampScale,
-			videoOptions,
-			videoTrackNumber: videoTrackNumber!,
-			videoCodecPrivateData: videoCodecPrivateData,
-			audioOptions,
-			audioTrackNumber,
-			seeks,
-			duration: durationSeconds,
-			mimeType,
-		};
-		return this.initData;
-	}
-
-	public async attach(video: HTMLVideoElement) {
-		const { duration, mimeType } = await this.init();
-
-		this.video = video;
+		// initialize video element and media source
+		const video = this.video;
 		const mediaSource = new MediaSource();
-		this.mediaSource = mediaSource;
 		video.src = URL.createObjectURL(mediaSource);
 
 		await new Promise<void>((resolve) => {
@@ -257,79 +236,12 @@ export class MKVVideoPlayer {
 			};
 			mediaSource.addEventListener("sourceopen", sourceopen);
 		});
-		mediaSource.duration = duration;
 
+		mediaSource.duration = durationSeconds;
 		const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
 		sourceBuffer.mode = "segments";
-		this.sourceBuffer = sourceBuffer;
 
-		this.seek(0);
-
-		video.addEventListener("seeking", () => {
-			console.log("seeking", video.currentTime);
-			if (this.isTimeBuffered(video.currentTime) && video.currentTime >= this.currentSeekedTime) {
-				// do not seek if the time is already buffered
-				console.log("already buffered");
-				return;
-			}
-			this.seek(video.currentTime);
-		});
-
-		video.addEventListener("stalled", () => {
-			console.log("stalled");
-		});
-	}
-
-	private isTimeBuffered(time: number) {
-		if (this.video === undefined) {
-			throw new Error("Video element is not set");
-		}
-		const video = this.video;
-		for (let i = 0; i < video.buffered.length; i++) {
-			const start = video.buffered.start(i);
-			const end = video.buffered.end(i);
-			if (time >= start && time <= end) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private async seekImpl(time: number) {
-		const {
-			segment,
-			timestampScale,
-			videoOptions,
-			videoTrackNumber,
-			videoCodecPrivateData,
-			audioOptions,
-			audioTrackNumber,
-			audioCodecPrivateData,
-			seeks,
-			duration: totalDuration,
-		} = await this.init();
-
-		this.currentSeekedTime = time;
-
-		const abortController = this.playerAbortController!;
-
-		if (this.video === undefined) {
-			throw new Error("Video element is not set");
-		}
-
-		const video = this.video;
-		const mediaSource = this.mediaSource!;
-		const sourceBuffer = this.sourceBuffer!;
-
-		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 30;
-
-		let seekIndex = seeks.findIndex((seek) => seek.time >= time);
-		seekIndex = Math.max(0, seekIndex - 1);
-		const seek = seeks[seekIndex];
-		const clusterPosition = seek.clusterPosition;
-
-		console.log("intended seek", seek.time, "actual seek", time, "clusterPosition", clusterPosition);
-
+		// initialize muxer
 		const muxer = new Muxer({
 			target: new StreamTarget({
 				onData: async (data: any) => {
@@ -351,109 +263,108 @@ export class MKVVideoPlayer {
 			firstTimestampBehavior: "keep",
 		});
 
+		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 30;
+		let seeked = false;
+		video.addEventListener("seeking", () => {
+			seeked = true;
+		});
+
 		let prevPts = 0;
 		let prevDts: number = 0;
 
 		let prevAudioTimestamp = 0;
 		let prevAudioData: ArrayBuffer | undefined;
 
-		for await (const cluster of segment.seekClusters(clusterPosition)) {
-			if (abortController.signal.aborted) {
-				break;
-			}
-			let firstVideoBlock = true;
-			const clusterTimestamp = await cluster.timestamp;
-			const clusterTimestampSeconds = clusterTimestamp * (timestampScale / 1e9);
-			while (clusterTimestampSeconds > video.currentTime + maxBufferSeconds) {
-				if (abortController.signal.aborted) {
+		while (true) {
+			seeked = false;
+			const videoTime = video.currentTime;
+
+			let seekIndex = seeks.findIndex((seek) => seek.time >= videoTime) ?? seeks.length;
+			seekIndex = Math.max(0, seekIndex - 1);
+			const seek = seeks[seekIndex];
+
+			for await (const cluster of segment.seekClusters(seek.clusterPosition)) {
+				if (seeked) {
 					break;
 				}
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
-			for await (const block of cluster.simpleBlocks) {
-				if (abortController.signal.aborted) {
+				let firstVideoBlock = true;
+				const clusterTimestamp = await cluster.timestamp;
+				const clusterTimestampSeconds = clusterTimestamp * (timestampScale / 1e9);
+				while (clusterTimestampSeconds > video.currentTime + maxBufferSeconds) {
+					if (seeked) {
+						break;
+					}
+					await new Promise((resolve) => setTimeout(resolve, 100));
+				}
+				if (seeked) {
 					break;
 				}
-				const trackNumber = await block.trackNumber;
-				if (trackNumber === videoTrackNumber) {
-					const blockTimestamp = await block.timestamp;
-					// console.log("blockTimestamp", blockTimestamp);
-					const pts = clusterTimestamp + blockTimestamp; // PTS: Presentation Time Stamp
-					// maxPtsRegression = Math.max(maxPtsRegression, pts - prevPts);
-					const dts = Math.max(prevDts, pts); // DTS: Decode Time Stamp
-					const delta = pts - dts;
-					const ptsMicroseconds = pts * (timestampScale / 1e3);
-					const deltaMicroseconds = delta * (timestampScale / 1e3);
-					// console.log("pts", pts, "dts", dts, "delta", delta);
-					const keyframe = (await block.keyframe) || firstVideoBlock;
-					let data = await block.data;
-					muxer.addVideoChunkRaw(
-						new Uint8Array(data),
-						keyframe ? "key" : "delta",
-						ptsMicroseconds,   // PTS
-						deltaMicroseconds, // PTS - DTS
-						0,
-						keyframe ? {
-							decoderConfig: {
-								codec: videoOptions!.codec,
-								description: videoCodecPrivateData,
-								optimizeForLatency: false,
-							}
-						} : undefined,
-					);
-					prevPts = pts;
-					prevDts = dts;
-					firstVideoBlock = false;
-				} else if (trackNumber === audioTrackNumber) {
-					const blockTimestamp = await block.timestamp;
-					const timestamp = clusterTimestamp + blockTimestamp;
-					if (prevAudioData !== undefined) {
-						const duration = timestamp - prevAudioTimestamp;
-						const prevTimestampMicroseconds = prevAudioTimestamp * (timestampScale / 1e3);
-						const durationMicroseconds = duration * (timestampScale / 1e3);
-						const data = await block.data;
-						muxer.addAudioChunkRaw(
+				for await (const block of cluster.simpleBlocks) {
+					if (seeked) {
+						break;
+					}
+					const trackNumber = await block.trackNumber;
+					if (trackNumber === videoTrackNumber) {
+						const blockTimestamp = await block.timestamp;
+						// console.log("blockTimestamp", blockTimestamp);
+						const pts = clusterTimestamp + blockTimestamp; // PTS: Presentation Time Stamp
+						// maxPtsRegression = Math.max(maxPtsRegression, pts - prevPts);
+						const dts = Math.max(prevDts, pts); // DTS: Decode Time Stamp
+						const delta = pts - dts;
+						const ptsMicroseconds = pts * (timestampScale / 1e3);
+						const deltaMicroseconds = delta * (timestampScale / 1e3);
+						// console.log("pts", pts, "dts", dts, "delta", delta);
+						const keyframe = (await block.keyframe) || firstVideoBlock;
+						let data = await block.data;
+						muxer.addVideoChunkRaw(
 							new Uint8Array(data),
-							"key",
-							prevTimestampMicroseconds,
-							durationMicroseconds,
-							{
+							keyframe ? "key" : "delta",
+							ptsMicroseconds,   // PTS
+							deltaMicroseconds, // PTS - DTS
+							0,
+							keyframe ? {
 								decoderConfig: {
-									codec: audioOptions!.codec,
-									description: audioCodecPrivateData,
+									codec: videoOptions!.codec,
+									description: videoCodecPrivateData,
 									optimizeForLatency: false,
 								}
-							},
+							} : undefined,
 						);
-					}
+						prevPts = pts;
+						prevDts = dts;
+						firstVideoBlock = false;
+					} else if (trackNumber === audioTrackNumber) {
+						const blockTimestamp = await block.timestamp;
+						const timestamp = clusterTimestamp + blockTimestamp;
+						if (prevAudioData !== undefined) {
+							const duration = timestamp - prevAudioTimestamp;
+							const prevTimestampMicroseconds = prevAudioTimestamp * (timestampScale / 1e3);
+							const durationMicroseconds = duration * (timestampScale / 1e3);
+							const data = await block.data;
+							muxer.addAudioChunkRaw(
+								new Uint8Array(data),
+								"key",
+								prevTimestampMicroseconds,
+								durationMicroseconds,
+								{
+									decoderConfig: {
+										codec: audioOptions!.codec,
+										description: audioCodecPrivateData,
+										optimizeForLatency: false,
+									}
+								},
+							);
+						}
 
-					prevAudioData = await block.data;
-					prevAudioTimestamp = timestamp;
+						prevAudioData = await block.data;
+						prevAudioTimestamp = timestamp;
+					}
 				}
 			}
 		}
 
 		console.log("seek finalize");
-
 		muxer.finalize();
-
-		await new Promise<void>((resolve) => { setTimeout(resolve, 1000); });
-
-		console.log("seek done");
-	}
-
-	public async seek(time: number) {
-		if (this.playerAbortController !== undefined) {
-			console.log("aborting previous seek");
-			this.playerAbortController.abort();
-		}
-		await this.playerPromise;
-
-		console.log("seek", time);
-
-		this.playerAbortController = new AbortController();
-		this.playerPromise = this.seekImpl(time);
-		await this.playerPromise;
 	}
 }
 

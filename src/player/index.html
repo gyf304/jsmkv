@@ -13,8 +13,7 @@
 			const video = document.getElementById("video");
 			file.addEventListener("change", () => {
 				const file = fileInput.files[0];
-				const player = new MKVVideoPlayer(file);
-				player.attach(video);
+				const player = new MKVVideoPlayer(file, video);
 			});
 		</script>
 	</body>
