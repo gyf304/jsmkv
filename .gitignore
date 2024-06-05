@@ -181,3 +181,4 @@ dist
 ./*.xml
 *.dump.txt
 *.bin
+playground/

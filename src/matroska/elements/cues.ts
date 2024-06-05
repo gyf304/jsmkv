@@ -14,16 +14,8 @@ export class Cues extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async *cuePointsGenerator(): AsyncGenerator<CuePoint> {
-		for await (const child of this.element.children) {
-			if (child.id.id === CuePoint.id) {
-				yield new CuePoint(child, this);
-			}
-		}
-	}
-
 	public get cuePoints(): AsyncGenerator<CuePoint> {
-		return this.cuePointsGenerator();
+		return this.many(CuePoint);
 	}
 }
 
@@ -43,16 +35,8 @@ export class CuePoint extends ebml.SchemaElement {
 		return this.one(CueTime).then(v => v.value);
 	}
 
-	private async *cueTrackPositionsGenerator(): AsyncGenerator<CueTrackPositions> {
-		for await (const child of this.element.children) {
-			if (child.id.id === CueTrackPositions.id) {
-				yield new CueTrackPositions(child, this);
-			}
-		}
-	}
-
 	public get cueTrackPositions(): AsyncGenerator<CueTrackPositions> {
-		return this.cueTrackPositionsGenerator();
+		return this.many(CueTrackPositions);
 	}
 }
 

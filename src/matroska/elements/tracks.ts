@@ -309,6 +309,10 @@ class Audio extends ebml.SchemaElement {
 	public get channels() {
 		return this.one(Channels).then(v => v.value);
 	}
+
+	public get bitDepth() {
+		return this.one(BitDepth).then(v => v.value);
+	}
 }
 
 export class SamplingFrequency extends ebml.FloatElement {

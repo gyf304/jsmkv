@@ -1,5 +1,3 @@
-import { concatArrayBuffers } from "bun";
-
 const temp = new ArrayBuffer(8);
 const tempView = new DataView(temp);
 const tempU8 = new Uint8Array(temp);
@@ -12,7 +10,7 @@ const identityMatrix = new Uint8Array([
 	64, 0, 0, 0,
 ]);
 
-function arrayConcat(...arrays: (Uint8Array | number[])[]): Uint8Array {
+export function arrayConcat(...arrays: (Uint8Array | number[])[]): Uint8Array {
 	let length = arrays.reduce((acc, arr) => acc + arr.length, 0);
 	let result = new Uint8Array(length);
 	let offset = 0;
@@ -59,7 +57,10 @@ function zeros(count: number): Uint8Array {
 	return new Uint8Array(count);
 }
 
-function ascii(text: string): Uint8Array {
+function ascii(text: string, length?: number): Uint8Array {
+	if (length !== undefined) {
+		text = text.padEnd(length, " ").slice(0, length);
+	}
 	const result = new Uint8Array(text.length);
 	for (let i = 0; i < text.length; i++) {
 		result[i] = text.charCodeAt(i);
@@ -93,15 +94,18 @@ function curryBox(type: string): (...children: (Uint8Array | number[])[]) => Uin
 
 export const moov = curryBox("moov");
 
-export function ftyp(option: {}): Uint8Array {
+interface FTYP {
+	majorBrand: string;
+	minorVersion: number;
+	compatibleBrands: string[];
+}
+
+export function ftyp({ majorBrand, minorVersion, compatibleBrands }: FTYP): Uint8Array {
 	return box(
 		"ftyp",
-		ascii("isom"),
-		u32(0x200),
-		ascii("isom"),
-		ascii("iso2"),
-		ascii("mp41"),
-		ascii("mp42"),
+		ascii(majorBrand, 4),
+		u32(minorVersion),
+		...compatibleBrands.map(brand => ascii(brand, 4)),
 	);
 }
 
@@ -131,9 +135,9 @@ export const trak = curryBox("trak");
 
 interface TKHD {
 	trackId: number;
-	duration: number;
-	width: number;
-	height: number;
+	duration?: number;
+	width?: number;
+	height?: number;
 }
 
 export function tkhd({ trackId, duration, width, height }: TKHD): Uint8Array {
@@ -144,27 +148,26 @@ export function tkhd({ trackId, duration, width, height }: TKHD): Uint8Array {
 		u32(0), // modification time
 		u32(trackId), // track id
 		zeros(4), // reserved
-		u32(duration), // duration
+		u32(duration ?? 0), // duration
 		zeros(8), // reserved
 		u16(0), // layer
 		u16(0), // alternate group
 		u16(0), // volume
 		zeros(2), // reserved
 		identityMatrix, // matrix
-		u16(width), u16(0), // width
-		u16(height), u16(0), // height
+		u16(width ?? 0), u16(0), // width
+		u16(height ?? 0), u16(0), // height
 	);
 }
 
 export const mdia = curryBox("mdia");
 
 interface MDHD {
-	trackId: number;
 	timeScale: number;
 	duration: number;
 }
 
-export function mdhd({ trackId, timeScale, duration }: MDHD): Uint8Array {
+export function mdhd({ timeScale, duration }: MDHD): Uint8Array {
 	return box(
 		"mdhd",
 		verflag(0, 0),
@@ -186,9 +189,13 @@ export function hdlr({ handlerType, handlerName }: HDLR): Uint8Array {
 	return box(
 		"hdlr",
 		verflag(0, 0),
+		u32(0), // pre-defined
 		ascii(handlerType),
-		zeros(12),
+		u32(0), // reserved
+		u32(0), // reserved
+		u32(0), // reserved
 		ascii(handlerName),
+		zeros(1),
 	);
 }
 
@@ -215,8 +222,17 @@ export function smhd({}: SMHD): Uint8Array {
 }
 
 export const dinf = curryBox("dinf");
-export const dref = curryBox("dref");
-export const url = curryBox("url ");
+export function dref(...entries: Uint8Array[]): Uint8Array {
+	return box(
+		"dref",
+		verflag(0, 0),
+		u32(entries.length),
+		...entries,
+	);
+}
+export function url(): Uint8Array {
+	return box("url ", zeros(4));
+}
 
 export const stbl = curryBox("stbl");
 
@@ -234,7 +250,7 @@ interface AVC1 {
 	height: number;
 }
 
-export function avc1({ width, height }: AVC1): Uint8Array {
+export function avc1({ width, height }: AVC1, ...children: Uint8Array[]): Uint8Array {
 	return box(
 		"avc1",
 		zeros(6),
@@ -249,6 +265,7 @@ export function avc1({ width, height }: AVC1): Uint8Array {
 		ascii("jsmkv"), // compressor name
 		zeros(32-5),
 		[24, 0xff, 0xff], // depth, pre-defined
+		...children,
 	);
 }
 
@@ -275,6 +292,72 @@ export function btrt(opt?: {}): Uint8Array {
 		u32(0), // bufferSizeDB
 		u32(0), // maxBitrate
 		u32(0), // avgBitrate
+	);
+}
+
+interface MP4A {
+	sampleSize: number;
+	sampleRate: number;
+	channelCount: number;
+}
+
+export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children: Uint8Array[]): Uint8Array {
+	// see https://xhelmboyx.tripod.com/formats/mp4-layout.txt#:~:text=mp4a
+	return box(
+		"mp4a",
+		zeros(6),
+		u16(1), // data reference index
+		u16(0), // audio encoding version
+		u16(0), // revision level
+		u32(0), // vendor
+		u16(channelCount), // channel count
+		u16(sampleSize), // sample size
+		u16(0), // compression id
+		u16(0), // packet size
+		u32(sampleRate), // sample rate
+		...children,
+	);
+}
+
+interface ESDS {
+	codecPrivate: Uint8Array;
+}
+
+export function esds({ codecPrivate }: ESDS): Uint8Array {
+	// from https://github.com/Vanilagy/mp4-muxer/blob/main/src/box.ts
+	return box(
+		"esds",
+		verflag(0, 0),
+		// https://stackoverflow.com/a/54803118
+		u32(0x03808080), // TAG(3) = Object Descriptor ([2])
+		[0x20 + codecPrivate.byteLength], // length of this OD (which includes the next 2 tags)
+		u16(1), // ES_ID = 1
+		[0x00], // flags etc = 0
+		u32(0x04808080), // TAG(4) = ES Descriptor ([2]) embedded in above OD
+		[0x12 + codecPrivate.byteLength], // length of this ESD
+		[0x40], // MPEG-4 Audio
+		[0x15], // stream type(6bits)=5 audio, flags(2bits)=1
+		[0, 0, 0], // 24bit buffer size
+		u32(0x0001fc17), // max bitrate
+		u32(0x0001fc17), // avg bitrate
+		u32(0x05808080), // TAG(5) = ASC ([2],[3]) embedded in above OD
+		[codecPrivate.byteLength], // length
+		codecPrivate,
+		u32(0x06808080), // TAG(6)
+		[0x01], // length
+		[0x02] // data
+	);
+}
+
+export function stts(...entries: { sampleCount: number, sampleDelta: number }[]): Uint8Array {
+	return box(
+		"stts",
+		verflag(0, 0),
+		u32(entries.length),
+		...entries.map(entry => arrayConcat(
+			u32(entry.sampleCount),
+			u32(entry.sampleDelta),
+		)),
 	);
 }
 
@@ -348,7 +431,7 @@ interface TFHD {
 export function tfhd({ trackId }: TFHD): Uint8Array {
 	return box(
 		"tfhd",
-		verflag(0, 0),
+		verflag(0, 0x020000), // default-base-is-moof
 		u32(trackId),
 	);
 }
@@ -392,8 +475,8 @@ function sampleFlags(flags: SampleFlags): number {
 	);
 }
 
-interface TRUN {
-	dataOffset?: number; // if not set, assume mdat immediately follows
+export interface TRUN {
+	dataOffset?: number;
 	samples: {
 		duration: number;
 		size: number;
@@ -410,23 +493,23 @@ export function trun({ dataOffset, samples }: TRUN): Uint8Array {
 	if (dataOffset !== undefined) {
 		flags |= 0x1; // data offset present
 	}
-	flags |= 0x4; // sample duration present
-	flags |= 0x100; // sample size present
-	flags |= 0x200; // sample flags present
+	flags |= 0x100; // sample duration present
+	flags |= 0x200; // sample size present
+	flags |= 0x400; // sample flags present
 	if (hasCompositionTimeOffset) {
 		flags |= 0x800; // sample composition time offset present
 	}
 
 	return box(
 		"trun",
-		verflag(1, 0),
+		verflag(1, flags),
 		u32(samples.length), // sample count
 		dataOffset !== undefined ? u32(dataOffset) : [],
 		...samples.map(sample => arrayConcat(
 			u32(sample.duration),
 			u32(sample.size),
 			u32(sampleFlags(sample.sampleFlags ?? {})),
-			i32(sample.compositionTimeOffset ?? 0),
+			hasCompositionTimeOffset ? i32(sample.compositionTimeOffset ?? 0) : [],
 		))
 	);
 }
