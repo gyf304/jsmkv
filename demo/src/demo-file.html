@@ -42,14 +42,18 @@
 				height: 32px;
 				filter: invert(1);
 			}
+			.open-file {
+				position: absolute;
+				top: 0;
+				left: 0;
+				padding: 8px;
+				color: white;
+				text-decoration: none;
+			}
 		</style>
 	</head>
 	<body>
-		<video class="mkv-player" controls>
-			<source
-				type="video/x-matroska"
-				src="https://public-files.yifangu.com/videos/tears_of_steel_720p.mkv"
-			/>
+		<video id="mkv-player" class="mkv-player" controls>
 		</video>
 		<div id="overlay">
 			<div class="github-link">
@@ -57,10 +61,19 @@
 					<img class="github-logo" src="https://unpkg.com/simple-icons@v12/icons/github.svg" alt="GitHub">
 				</a>
 			</div>
+			<div class="open-file">
+				<input id="file-input" type="file" accept=".mkv" />
+			</div>
 		</div>
 		<script type="module">
-			import { polyfill } from "./index.js";
-			polyfill();
+			import { player } from "./index.js";
+			const fileInput = document.getElementById("file-input");
+			fileInput.addEventListener("change", async () => {
+				const file = fileInput.files[0];
+				if (file) {
+					const player = new player.MKVVideoPlayer(file, document.getElementById("mkv-player"));
+				}
+			});
 		</script>
 	</body>
 </html>

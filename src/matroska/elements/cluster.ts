@@ -78,7 +78,7 @@ export class SimpleBlock extends ebml.SchemaElement {
 		// 2-byte timestamp
 		const bytes = await this.element.data.slice(tnSize, tnSize + 2).arrayBuffer();
 		const view = new DataView(bytes);
-		this.cachedTimestamp = view.getUint16(0, false);
+		this.cachedTimestamp = view.getInt16(0, false);
 		return this.cachedTimestamp;
 	}
 

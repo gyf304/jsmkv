@@ -5,7 +5,10 @@ import * as mkve from "../matroska/elements";
 
 import * as m from "./box";
 
-const supportedVideoCodecs = ["V_MPEG4/ISO/AVC"] as const;
+const supportedVideoCodecs = [
+	"V_MPEG4/ISO/AVC",
+	"V_MPEGH/ISO/HEVC",
+] as const;
 const supportedAudioCodecs = ["A_AAC"] as const;
 
 interface SeekCluster {
@@ -25,11 +28,34 @@ interface Track {
 	trak: m.ArrayBuilder;
 }
 
+function bitReverse32(n: number) {
+	n = ((n & 0x55555555) << 1) | ((n & 0xAAAAAAAA) >>> 1);
+	n = ((n & 0x33333333) << 2) | ((n & 0xCCCCCCCC) >>> 2);
+	n = ((n & 0x0F0F0F0F) << 4) | ((n & 0xF0F0F0F0) >>> 4);
+	n = ((n & 0x00FF00FF) << 8) | ((n & 0xFF00FF00) >>> 8);
+	n = ((n & 0x0000FFFF) << 16) | ((n & 0xFFFF0000) >>> 16);
+	return n >>> 0;
+}
+
 function hexString(buffer: ArrayBuffer) {
 	return Array
 		.from(new Uint8Array(buffer))
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("").toUpperCase();
+}
+
+function hevcMimeCodec(cpd: ArrayBuffer) {
+	// see: https://www.w3.org/TR/webcodecs-hevc-codec-registration/
+	// HEVCDecoderConfigurationRecord in ISO/IEC 14496-15 (8.3.3.1.2)
+	const v = new DataView(cpd);
+	// gp = general profile
+	const gpSpace = ["", "A", "B", "C"][(v.getUint8(1) >> 6) & 0b11];
+	const gpTierFlag = ["L", "H"][(v.getUint8(1) >> 5) & 1];
+	const gpIDC = v.getUint8(1) & 0x1F;
+	const gpCompatibility = bitReverse32(v.getUint32(2));
+	const gpLevelIdc = v.getUint8(12);
+	const gpConstraintFlags = hexString(cpd.slice(6, 12)).replace(/(00)*$/, "");
+	return `hvc1.${gpSpace}${gpIDC}.${gpCompatibility}.${gpTierFlag}${gpLevelIdc}.${gpConstraintFlags}`;
 }
 
 async function *withNextAsync<T>(iterable: AsyncIterable<T>): AsyncIterable<[T, T | undefined]> {
@@ -72,6 +98,24 @@ export class MKVToMP4Muxer {
 		return this.duration!;
 	}
 
+	public async readCluster(cluster: mkve.Cluster) {
+		const blocks: mkve.SimpleBlock[] = [];
+		for await (const block of cluster.simpleBlocks) {
+			blocks.push(block);
+		}
+		const blocksByTrack: Map<number, mkve.SimpleBlock[]> = new Map();
+		for (const block of blocks) {
+			const trackNumber = await block.trackNumber;
+			let blocks = blocksByTrack.get(trackNumber);
+			if (blocks === undefined) {
+				blocks = [];
+				blocksByTrack.set(trackNumber, blocks);
+			}
+			blocks.push(block);
+		}
+		return blocksByTrack;
+	}
+
 	public async *streamFrom(timeInSeconds: number): AsyncIterable<ArrayBuffer> {
 		await this.init();
 		const segment = this.mkvSegment!;
@@ -91,21 +135,22 @@ export class MKVToMP4Muxer {
 			const nextClusterTimestamp = await nextCluster?.timestamp ?? duration;
 			const clusterDuration = Math.max(0, nextClusterTimestamp - clusterTimestamp);
 
-			const allBlocks: mkve.SimpleBlock[] = [];
-			for await (const block of cluster.simpleBlocks) {
-				allBlocks.push(block);
+			const blocksByTrack = await this.readCluster(cluster);
+			const blocksFirstTimestamps = new Map<number, number>();
+			for (const [trackNumber, blocks] of blocksByTrack) {
+				const firstTimestamp = await blocks[0].timestamp;
+				blocksFirstTimestamps.set(trackNumber, firstTimestamp);
 			}
 
-			const blocksByTrack: Map<number, mkve.SimpleBlock[]> = new Map();
-			for (const block of allBlocks) {
-				const trackNumber = await block.trackNumber;
-				let blocks = blocksByTrack.get(trackNumber);
-				if (blocks === undefined) {
-					blocks = [];
-					blocksByTrack.set(trackNumber, blocks);
+			const nextBlocksByTrack = nextCluster === undefined ? undefined : await this.readCluster(nextCluster);
+			const nextBlocksFirstTimestamps = new Map<number, number>();
+			if (nextBlocksByTrack !== undefined) {
+				for (const [trackNumber, blocks] of nextBlocksByTrack) {
+					const firstTimestamp = await blocks[0].timestamp;
+					nextBlocksFirstTimestamps.set(trackNumber, firstTimestamp);
 				}
-				blocks.push(block);
 			}
+
 			const trackNumbers = Array.from(blocksByTrack.keys()).sort();
 
 			const trackData: {
@@ -124,23 +169,34 @@ export class MKVToMP4Muxer {
 					const pts = await block.timestamp;
 					ptses.push(pts);
 				}
+				const nextPts = clusterDuration + (nextBlocksFirstTimestamps.get(trackNumber) ?? 0);
+				ptses.push(nextPts);
 
-				// make DTS monotonic, and less than duration
+				// make DTS monotonic
 				let dtses = ptses.slice();
+				let max = 0;
 				for (let i = 1; i < dtses.length; i++) {
 					if (dtses[i] < dtses[i-1]) {
-						dtses[i] = dtses[i-1];
+						max = Math.max(max, dtses[i-1]);
+						dtses[i] = max;
 					}
 				}
-				dtses = dtses.map((dts) => dts - dtses[0]);
+
+				const durations: number[] = [];
+				for (let i = 0; i < blocks.length; i++) {
+					durations.push(dtses[i+1] - dtses[i]);
+				}
 
 				for (let i = 0; i < blocks.length; i++) {
 					const block = blocks[i];
 					const pts = ptses[i]; // PTS: Presentation Time Stamp
 					const dts = dtses[i]; // DTS: Decode Time Stamp
-					const nextDts = dtses[i+1] ?? clusterDuration;
+					const duration = durations[i];
 
-					const duration = nextDts - dts;
+					if (duration < 0) {
+						console.log({ pts, dts, duration });
+						throw new Error("Invalid duration");
+					}
 
 					const keyframe = await block.keyframe;
 					const data = await block.data;
@@ -161,7 +217,7 @@ export class MKVToMP4Muxer {
 						trackId: trackNumber,
 					}),
 					m.tfdt({
-						baseMediaDecodeTime: clusterTimestamp,
+						baseMediaDecodeTime: clusterTimestamp + (blocksFirstTimestamps.get(trackNumber) ?? 0),
 					}),
 					m.trun({
 						dataOffset: offset,
@@ -222,7 +278,9 @@ export class MKVToMP4Muxer {
 		}
 		const timestampScale = await info.timestampScale; // in ns
 		const duration = await info.duration; // in timestampScale
+		// console.log({ timestampScale, duration });
 		const durationSeconds = duration * (timestampScale / 1e9);
+		// console.log("Duration:", durationSeconds);
 		this.mkvDuration = duration;
 		this.duration = durationSeconds;
 
@@ -264,7 +322,10 @@ export class MKVToMP4Muxer {
 						type: "video",
 						mkvTrackNumber: trackNumber,
 						mp4TrackId: convertedTracks.length + 1,
-						mimeCodec: `avc1.${hexString(codecPrivateData.slice(1, 4))}`,
+						mimeCodec:
+							codecID === "V_MPEGH/ISO/HEVC" ?
+							hevcMimeCodec(codecPrivateData) :
+							`avc1.${hexString(codecPrivateData.slice(1, 4))}`,
 						trak: m.trak(
 							m.tkhd({
 								trackId: trackNumber,
@@ -290,7 +351,10 @@ export class MKVToMP4Muxer {
 									),
 									m.stbl(
 										m.stsd(
-											m.avc1(
+											codecID === "V_MPEGH/ISO/HEVC" ? m.hev1(
+												{ width, height },
+												m.hvcc(new Uint8Array(codecPrivateData)),
+											) : m.avc1(
 												{ width, height },
 												m.avcc(new Uint8Array(codecPrivateData)),
 											),

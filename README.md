@@ -1,15 +1,14 @@
 # jsmkv
 
-To install dependencies:
+## Demo
+To be added here
 
-```bash
-bun install
-```
+## Description
+JSMKV is a in browser MKV (Matroska) file player and a suite of typescript
+tools for working with Matroska files.
 
-To run:
+It includes:
+- A browser based MKV player
+- A Matroska file parser
+- A Generic EBML parser / writer
 
-```bash
-bun run src/index.ts
-```
-
-This project was created using `bun init` in bun v1.0.3. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

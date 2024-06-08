@@ -13,7 +13,8 @@
     "typescript": "^5.0.0"
   },
   "scripts": {
-    "cli": "bun src/cli.ts"
+    "cli": "bun src/cli.ts",
+    "build:demo": "mkdir -p demo/dist && bun build --minify src/index.ts > demo/dist/index.js && cp demo/src/*.html demo/dist/"
   },
   "dependencies": {
     "lru-cache": "^10.2.2"

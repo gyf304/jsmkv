@@ -302,14 +302,14 @@ export function stsd(...entries: ArrayBuilder[]): ArrayBuilder {
 	);
 }
 
-interface AVC1 {
+interface AVC1Like {
 	width: number;
 	height: number;
 }
 
-export function avc1({ width, height }: AVC1, ...children: ArrayBuilderPart[]): ArrayBuilder {
-	return box(
-		"avc1",
+function avc1Like(type: string) {
+	return ({ width, height }: AVC1Like, ...children: ArrayBuilderPart[]) => box(
+		type,
 		zeros(6),
 		u16(1), // data reference index
 		zeros(16),
@@ -326,8 +326,15 @@ export function avc1({ width, height }: AVC1, ...children: ArrayBuilderPart[]): 
 	);
 }
 
+export const avc1 = avc1Like("avc1");
+export const hev1 = avc1Like("hev1");
+
 export function avcc(data: ArrayBuilderPart): ArrayBuilder {
 	return box("avcC", data);
+}
+
+export function hvcc(data: ArrayBuilderPart): ArrayBuilder {
+	return box("hvcC", data);
 }
 
 interface PASP {
