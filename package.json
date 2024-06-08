@@ -14,7 +14,7 @@
   },
   "scripts": {
     "cli": "bun src/cli.ts",
-    "build:demo": "mkdir -p demo/dist && bun build --minify src/index.ts > demo/dist/index.js && cp demo/src/*.html demo/dist/"
+    "build:demo": "bun demo/build.ts"
   },
   "dependencies": {
     "lru-cache": "^10.2.2"

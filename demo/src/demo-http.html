@@ -42,19 +42,33 @@
 				height: 32px;
 				filter: invert(1);
 			}
+			.attribution {
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				padding: 8px;
+				color: white;
+				text-decoration: none;
+			}
 		</style>
 	</head>
 	<body>
 		<video class="mkv-player" controls>
 			<source
 				type="video/x-matroska"
-				src="https://public-files.yifangu.com/videos/tears_of_steel_720p.mkv"
+				src="./spring-blender-open-movie.mkv"
 			/>
 		</video>
 		<div id="overlay">
 			<div class="github-link">
 				<a href="https://github.com/gyf304/jsmkv" target="_blank">
 					<img class="github-logo" src="https://unpkg.com/simple-icons@v12/icons/github.svg" alt="GitHub">
+				</a>
+			</div>
+			<div class="attribution">
+				<a href="https://cloud.blender.org/spring" target="_blank">
+					&copy; Blender Foundation | cloud.blender.org/spring
+					Licensed under CC-BY 4.0
 				</a>
 			</div>
 		</div>
