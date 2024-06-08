@@ -311,7 +311,7 @@ class Audio extends ebml.SchemaElement {
 	}
 
 	public get bitDepth() {
-		return this.one(BitDepth).then(v => v.value);
+		return this.maybeOne(BitDepth).then(v => v?.value);
 	}
 }
 

@@ -1,5 +1,5 @@
 import * as ebml from "../ebml";
-import { BlobLike } from "../bloblike";
+import { BlobLike, FetchBlobLike } from "../bloblike";
 import { File } from "../matroska";
 import * as mkve from "../matroska/elements";
 
@@ -22,11 +22,14 @@ interface Track {
 	mimeCodec: string;
 	mkvTrackNumber: number;
 	mp4TrackId: number;
-	trak: Uint8Array;
+	trak: m.ArrayBuilder;
 }
 
 function hexString(buffer: ArrayBuffer) {
-	return Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+	return Array
+		.from(new Uint8Array(buffer))
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("").toUpperCase();
 }
 
 async function *withNextAsync<T>(iterable: AsyncIterable<T>): AsyncIterable<[T, T | undefined]> {
@@ -77,9 +80,7 @@ export class MKVToMP4Muxer {
 		const seeks = this.seeks!;
 		let seekIndex = seeks.findIndex((seek) => seek.time >= timeInSeconds) ?? seeks.length;
 		seekIndex = Math.max(0, seekIndex - 1);
-		console.log("seekIndex", seekIndex);
 		const seek = seeks[seekIndex];
-		console.log("seekTime", seek.time);
 		const clusters = segment.seekClusters(seek.clusterPosition);
 
 		let sequenceNumber = seekIndex;
@@ -89,12 +90,6 @@ export class MKVToMP4Muxer {
 			const clusterTimestamp = await cluster.timestamp;
 			const nextClusterTimestamp = await nextCluster?.timestamp ?? duration;
 			const clusterDuration = Math.max(0, nextClusterTimestamp - clusterTimestamp);
-
-			if (clusterTimestamp < 100000) {
-				console.log("clusterTimestamp", clusterTimestamp);
-				console.log("nextClusterTimestamp", nextClusterTimestamp);
-				console.log("clusterDuration", clusterDuration);
-			}
 
 			const allBlocks: mkve.SimpleBlock[] = [];
 			for await (const block of cluster.simpleBlocks) {
@@ -115,13 +110,13 @@ export class MKVToMP4Muxer {
 
 			const trackData: {
 				trackNumber: number;
-				traf: (offset: number) => Uint8Array,
-				data: Uint8Array
+				traf: (offset: number) => m.ArrayBuilder,
+				data: m.ArrayBuilder,
 			}[] = [];
 			for (const trackNumber of trackNumbers) {
 				const blocks = blocksByTrack.get(trackNumber)!;
 				const samples: m.TRUN["samples"] = [];
-				const dataParts: Uint8Array[] = [];
+				const dataParts: m.ArrayBuilderPart[] = [];
 
 				const ptses: number[] = [];
 				for (let i = 0; i < blocks.length; i++) {
@@ -161,11 +156,6 @@ export class MKVToMP4Muxer {
 					});
 				}
 
-				const durationSum = samples.reduce((acc, sample) => acc + sample.duration, 0);
-				if (durationSum !== clusterDuration) {
-					console.warn("Duration mismatch", durationSum, clusterDuration);
-				}
-
 				const traf = (offset: number) => m.traf(
 					m.tfhd({
 						trackId: trackNumber,
@@ -179,7 +169,7 @@ export class MKVToMP4Muxer {
 					}),
 				);
 
-				const data = m.arrayConcat(...dataParts);
+				const data = m.ArrayBuilder.concat(...dataParts);
 				trackData.push({ trackNumber, traf, data });
 			}
 
@@ -203,7 +193,7 @@ export class MKVToMP4Muxer {
 
 			const mdat = m.mdat(...trackData.map(({ data }) => data));
 
-			yield m.arrayConcat(moof, mdat).buffer as ArrayBuffer;
+			yield m.ArrayBuilder.concat(moof, mdat).valueOf().buffer as ArrayBuffer;
 		}
 	}
 
@@ -332,8 +322,7 @@ export class MKVToMP4Muxer {
 					const trackNumber = await track.trackNumber;
 					const channelCount = await audio.channels;
 					const sampleRate = await audio.samplingFrequency;
-					console.log("SampleRate", sampleRate);
-					const sampleSize = await audio.bitDepth;
+					const sampleSize = await audio.bitDepth ?? 16;
 					const codecPrivate = await track.maybeOne(mkve.CodecPrivate);
 					if (codecPrivate === undefined) {
 						throw new Error("CodecPrivate not found");
@@ -428,7 +417,7 @@ export class MKVToMP4Muxer {
 		this.seeks = seeks;
 
 		// initialize header
-		const initializationSegment = m.arrayConcat(
+		const initializationSegment = m.ArrayBuilder.concat(
 			m.ftyp({
 				majorBrand: "isom",
 				minorVersion: 0,
@@ -450,7 +439,7 @@ export class MKVToMP4Muxer {
 			),
 		);
 
-		this.initializationSegment = initializationSegment.buffer as ArrayBuffer;
+		this.initializationSegment = initializationSegment.valueOf().buffer as ArrayBuffer;
 	}
 }
 
@@ -482,19 +471,6 @@ export class MKVVideoPlayer {
 
 		mediaSource.duration = durationSeconds;
 		const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-		sourceBuffer.mode = "segments";
-
-		// initialize header
-		sourceBuffer.appendBuffer(initSegment);
-
-		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 30;
-
-		let seeked = true;
-		const onSeeking = () => {
-			seeked = true;
-		};
-		video.addEventListener("seeking", onSeeking);
-
 		const waitForSourceBuffer = () => new Promise<void>((resolve) => {
 			if (sourceBuffer.updating) {
 				const updateend = () => {
@@ -506,12 +482,24 @@ export class MKVVideoPlayer {
 				resolve();
 			}
 		});
+		sourceBuffer.mode = "segments";
+
+		// initialize header
+		sourceBuffer.appendBuffer(initSegment);
+		await waitForSourceBuffer();
+
+		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 30;
+
+		let seeked = true;
+		const onSeeking = () => {
+			seeked = true;
+		};
+		video.addEventListener("seeking", onSeeking);
 
 		while (true) {
 			seeked = false;
 
 			const videoTime = video.currentTime;
-			const muxer = new MKVToMP4Muxer(this.source);
 			const stream = muxer.streamFrom(videoTime);
 
 			for await (const chunk of stream) {
@@ -532,7 +520,6 @@ export class MKVVideoPlayer {
 					}
 					timeRanges.push([start, end]);
 				}
-				// console.log("Buffered", timeRanges);
 				const currentTime = video.currentTime;
 				const currentTimeRange = timeRanges.find(([start, end]) => start <= currentTime && currentTime <= end);
 				while (currentTimeRange !== undefined && (video.currentTime + maxBufferSeconds) < currentTimeRange[1]) {
@@ -544,7 +531,6 @@ export class MKVVideoPlayer {
 				if (seeked) {
 					break;
 				}
-				console.log("Appending", chunk.byteLength, "bytes");
 				sourceBuffer.appendBuffer(chunk);
 				await waitForSourceBuffer();
 
@@ -557,13 +543,13 @@ export class MKVVideoPlayer {
 					const desiredBufferEnd = Math.min(bufferEnd, currentTime + maxBufferSeconds * 2);
 
 					if (bufferStart < desiredBufferStart) {
-						console.log("Removing", bufferStart, "to", desiredBufferStart);
 						sourceBuffer.remove(0, desiredBufferStart);
+						await waitForSourceBuffer();
 					}
 
 					if (bufferEnd > desiredBufferEnd) {
-						console.log("Removing", desiredBufferEnd, "to", bufferEnd);
 						sourceBuffer.remove(desiredBufferEnd, bufferEnd);
+						await waitForSourceBuffer();
 					}
 				}
 			}
@@ -576,3 +562,33 @@ export class MKVVideoPlayer {
 	}
 }
 
+export function polyfill() {
+	const mkvUrls = new Map<HTMLVideoElement, string>(); // video element -> source URL
+	setInterval(async () => {
+		const videos = document.querySelectorAll<HTMLVideoElement>("video.mkv-player");
+		const newVideos: [HTMLVideoElement, string][] = [];
+		for (const video of videos) {
+			const sources = video.querySelectorAll("source");
+			let mkvSource: string | undefined;
+			for (const source of sources) {
+				if (source.type === "video/x-matroska" || (source.type === "" && source.src.endsWith(".mkv"))) {
+					mkvSource = source.src;
+					break;
+				}
+			}
+			if (mkvSource === undefined) {
+				continue;
+			}
+			const prevSource = mkvUrls.get(video);
+			if (prevSource === mkvSource) {
+				continue;
+			}
+			mkvUrls.set(video, mkvSource);
+			newVideos.push([video, mkvSource]);
+		}
+		for (const [video, mkvSource] of newVideos) {
+			const blobLike = await FetchBlobLike.fromUrl(mkvSource);
+			const player = new MKVVideoPlayer(blobLike, video);
+		}
+	}, 1000);
+}

@@ -13,30 +13,12 @@ export class Seek extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async getSeekID(): Promise<SeekID> {
-		for await (const child of this.element.children) {
-			if (child.id.id === SeekID.id) {
-				return new SeekID(child, this);
-			}
-		}
-		throw new Error("SeekID not found");
-	}
-
 	public get seekID(): Promise<SeekID> {
-		return this.getSeekID();
-	}
-
-	private async getSeekPosition(): Promise<SeekPosition> {
-		for await (const child of this.element.children) {
-			if (child.id.id === SeekPosition.id) {
-				return new SeekPosition(child, this);
-			}
-		}
-		throw new Error("SeekPosition not found");
+		return this.one(SeekID);
 	}
 
 	public get seekPosition(): Promise<SeekPosition> {
-		return this.getSeekPosition();
+		return this.one(SeekPosition);
 	}
 }
 
@@ -50,16 +32,8 @@ export class SeekHead extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async *seeksGenerator(): AsyncGenerator<Seek> {
-		for await (const child of this.element.children) {
-			if (child.id.id === Seek.id) {
-				yield new Seek(child, this);
-			}
-		}
-	}
-
 	public get seeks(): AsyncGenerator<Seek> {
-		return this.seeksGenerator();
+		return this.many(Seek);
 	}
 }
 

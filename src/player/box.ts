@@ -10,15 +10,71 @@ const identityMatrix = new Uint8Array([
 	64, 0, 0, 0,
 ]);
 
-export function arrayConcat(...arrays: (Uint8Array | number[])[]): Uint8Array {
-	let length = arrays.reduce((acc, arr) => acc + arr.length, 0);
-	let result = new Uint8Array(length);
-	let offset = 0;
-	for (let arr of arrays) {
-		result.set(arr, offset);
-		offset += arr.length;
+export type ArrayBuilderPart = ArrayBuilder | Uint8Array | number[];
+
+export class ArrayBuilder {
+	protected chunks: Uint8Array[] = [];
+	private privateLength = 0;
+
+	public get byteLength(): number {
+		return this.privateLength;
 	}
-	return result;
+
+	public get length(): number {
+		return this.privateLength;
+	}
+
+	public append(...chunks: ArrayBuilderPart[]): void {
+		for (let chunk of chunks) {
+			const parts = ArrayBuilder.toParts(chunk);
+			for (let part of parts) {
+				this.chunks.push(part);
+				this.privateLength += part.length;
+			}
+		}
+	}
+
+	public prepend(chunk: ArrayBuilderPart): void {
+		const parts = ArrayBuilder.toParts(chunk);
+		for (let part of parts) {
+			this.chunks.unshift(part);
+			this.privateLength += part.length;
+		}
+	}
+
+	public build(): Uint8Array {
+		let result = new Uint8Array(this.privateLength);
+		let offset = 0;
+		for (let chunk of this.chunks) {
+			result.set(chunk, offset);
+			offset += chunk.length;
+		}
+		return result;
+	}
+
+	public valueOf(): Uint8Array {
+		return this.build();
+	}
+
+	public static concat(...parts: ArrayBuilderPart[]): ArrayBuilder {
+		let builder = new ArrayBuilder();
+		for (let part of parts) {
+			builder.append(part);
+		}
+		return builder;
+	}
+
+	private static toParts(part: ArrayBuilderPart): Uint8Array[] {
+		if (part instanceof ArrayBuilder) {
+			return part.chunks;
+		} else if (part instanceof Uint8Array) {
+			return [part];
+		} else if (Array.isArray(part)) {
+			return [new Uint8Array(part)];
+		} else {
+			throw new Error("Invalid part");
+		}
+	}
 }
 
 function u64(value: number | bigint): Uint8Array {
@@ -79,16 +135,17 @@ export function hexdump(data: Uint8Array): string {
 	return lines.join("\n");
 }
 
-export function box(type: string, ...children: (Uint8Array | number[])[]): Uint8Array {
-	let size = 8 + children.reduce((acc, child) => acc + child.length, 0);
-	return arrayConcat(
+export function box(type: string, ...children: ArrayBuilderPart[]): ArrayBuilder {
+	const builder = ArrayBuilder.concat(...children);
+	let size = 8 + builder.build().length;
+	return ArrayBuilder.concat(
 		u32(size),
 		ascii(type),
-		...children,
+		builder,
 	);
 }
 
-function curryBox(type: string): (...children: (Uint8Array | number[])[]) => Uint8Array {
+function curryBox(type: string): (...children: ArrayBuilderPart[]) => ArrayBuilder {
 	return (...children) => box(type, ...children);
 }
 
@@ -100,7 +157,7 @@ interface FTYP {
 	compatibleBrands: string[];
 }
 
-export function ftyp({ majorBrand, minorVersion, compatibleBrands }: FTYP): Uint8Array {
+export function ftyp({ majorBrand, minorVersion, compatibleBrands }: FTYP): ArrayBuilder {
 	return box(
 		"ftyp",
 		ascii(majorBrand, 4),
@@ -115,7 +172,7 @@ interface MVHD {
 	nextTrackId: number;
 }
 
-export function mvhd({ timeScale, duration, nextTrackId }: MVHD): Uint8Array {
+export function mvhd({ timeScale, duration, nextTrackId }: MVHD): ArrayBuilder {
 	return box(
 		"mvhd",
 		verflag(0, 0),
@@ -140,7 +197,7 @@ interface TKHD {
 	height?: number;
 }
 
-export function tkhd({ trackId, duration, width, height }: TKHD): Uint8Array {
+export function tkhd({ trackId, duration, width, height }: TKHD): ArrayBuilder {
 	return box(
 		"tkhd",
 		verflag(0, 3),
@@ -167,7 +224,7 @@ interface MDHD {
 	duration: number;
 }
 
-export function mdhd({ timeScale, duration }: MDHD): Uint8Array {
+export function mdhd({ timeScale, duration }: MDHD): ArrayBuilder {
 	return box(
 		"mdhd",
 		verflag(0, 0),
@@ -185,7 +242,7 @@ interface HDLR {
 	handlerName: string;
 }
 
-export function hdlr({ handlerType, handlerName }: HDLR): Uint8Array {
+export function hdlr({ handlerType, handlerName }: HDLR): ArrayBuilder {
 	return box(
 		"hdlr",
 		verflag(0, 0),
@@ -203,7 +260,7 @@ export const minf = curryBox("minf");
 
 interface VMHD {}
 
-export function vmhd({}: VMHD): Uint8Array {
+export function vmhd({}: VMHD): ArrayBuilder {
 	return box(
 		"vmhd",
 		verflag(0, 1),
@@ -213,7 +270,7 @@ export function vmhd({}: VMHD): Uint8Array {
 
 interface SMHD {}
 
-export function smhd({}: SMHD): Uint8Array {
+export function smhd({}: SMHD): ArrayBuilder {
 	return box(
 		"smhd",
 		verflag(0, 0),
@@ -222,7 +279,7 @@ export function smhd({}: SMHD): Uint8Array {
 }
 
 export const dinf = curryBox("dinf");
-export function dref(...entries: Uint8Array[]): Uint8Array {
+export function dref(...entries: ArrayBuilderPart[]): ArrayBuilder {
 	return box(
 		"dref",
 		verflag(0, 0),
@@ -230,13 +287,13 @@ export function dref(...entries: Uint8Array[]): Uint8Array {
 		...entries,
 	);
 }
-export function url(): Uint8Array {
+export function url(): ArrayBuilder {
 	return box("url ", zeros(4));
 }
 
 export const stbl = curryBox("stbl");
 
-export function stsd(...entries: Uint8Array[]): Uint8Array {
+export function stsd(...entries: ArrayBuilder[]): ArrayBuilder {
 	return box(
 		"stsd",
 		verflag(0, 0),
@@ -250,7 +307,7 @@ interface AVC1 {
 	height: number;
 }
 
-export function avc1({ width, height }: AVC1, ...children: Uint8Array[]): Uint8Array {
+export function avc1({ width, height }: AVC1, ...children: ArrayBuilderPart[]): ArrayBuilder {
 	return box(
 		"avc1",
 		zeros(6),
@@ -269,7 +326,7 @@ export function avc1({ width, height }: AVC1, ...children: Uint8Array[]): Uint8A
 	);
 }
 
-export function avcc(data: Uint8Array): Uint8Array {
+export function avcc(data: ArrayBuilderPart): ArrayBuilder {
 	return box("avcC", data);
 }
 
@@ -278,7 +335,7 @@ interface PASP {
 	vSpacing?: number;
 }
 
-export function pasp(opt?: PASP): Uint8Array {
+export function pasp(opt?: PASP): ArrayBuilder {
 	return box(
 		"pasp",
 		u32(opt?.hSpacing ?? 1),
@@ -286,7 +343,7 @@ export function pasp(opt?: PASP): Uint8Array {
 	);
 }
 
-export function btrt(opt?: {}): Uint8Array {
+export function btrt(opt?: {}): ArrayBuilder {
 	return box(
 		"btrt",
 		u32(0), // bufferSizeDB
@@ -301,7 +358,7 @@ interface MP4A {
 	channelCount: number;
 }
 
-export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children: Uint8Array[]): Uint8Array {
+export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children: ArrayBuilderPart[]): ArrayBuilder {
 	// see https://xhelmboyx.tripod.com/formats/mp4-layout.txt#:~:text=mp4a
 	return box(
 		"mp4a",
@@ -320,28 +377,28 @@ export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children
 }
 
 interface ESDS {
-	codecPrivate: Uint8Array;
+	codecPrivate: ArrayBuilderPart;
 }
 
-export function esds({ codecPrivate }: ESDS): Uint8Array {
+export function esds({ codecPrivate }: ESDS): ArrayBuilder {
 	// from https://github.com/Vanilagy/mp4-muxer/blob/main/src/box.ts
 	return box(
 		"esds",
 		verflag(0, 0),
 		// https://stackoverflow.com/a/54803118
 		u32(0x03808080), // TAG(3) = Object Descriptor ([2])
-		[0x20 + codecPrivate.byteLength], // length of this OD (which includes the next 2 tags)
+		[0x20 + codecPrivate.length], // length of this OD (which includes the next 2 tags)
 		u16(1), // ES_ID = 1
 		[0x00], // flags etc = 0
 		u32(0x04808080), // TAG(4) = ES Descriptor ([2]) embedded in above OD
-		[0x12 + codecPrivate.byteLength], // length of this ESD
+		[0x12 + codecPrivate.length], // length of this ESD
 		[0x40], // MPEG-4 Audio
 		[0x15], // stream type(6bits)=5 audio, flags(2bits)=1
 		[0, 0, 0], // 24bit buffer size
 		u32(0x0001fc17), // max bitrate
 		u32(0x0001fc17), // avg bitrate
 		u32(0x05808080), // TAG(5) = ASC ([2],[3]) embedded in above OD
-		[codecPrivate.byteLength], // length
+		[codecPrivate.length], // length
 		codecPrivate,
 		u32(0x06808080), // TAG(6)
 		[0x01], // length
@@ -349,19 +406,19 @@ export function esds({ codecPrivate }: ESDS): Uint8Array {
 	);
 }
 
-export function stts(...entries: { sampleCount: number, sampleDelta: number }[]): Uint8Array {
+export function stts(...entries: { sampleCount: number, sampleDelta: number }[]): ArrayBuilder {
 	return box(
 		"stts",
 		verflag(0, 0),
 		u32(entries.length),
-		...entries.map(entry => arrayConcat(
+		...entries.map(entry => ArrayBuilder.concat(
 			u32(entry.sampleCount),
 			u32(entry.sampleDelta),
 		)),
 	);
 }
 
-export function stsc(...entries: Uint8Array[]): Uint8Array {
+export function stsc(...entries: ArrayBuilder[]): ArrayBuilder {
 	return box(
 		"stsc",
 		verflag(0, 0),
@@ -370,7 +427,7 @@ export function stsc(...entries: Uint8Array[]): Uint8Array {
 	);
 }
 
-export function stsz(...entries: number[]): Uint8Array {
+export function stsz(...entries: number[]): ArrayBuilder {
 	return box(
 		"stsz",
 		verflag(0, 0),
@@ -380,7 +437,7 @@ export function stsz(...entries: number[]): Uint8Array {
 	);
 }
 
-export function stco(...entries: (number | bigint)[]): Uint8Array {
+export function stco(...entries: (number | bigint)[]): ArrayBuilder {
 	return box(
 		"stco",
 		verflag(0, 0),
@@ -396,7 +453,7 @@ interface TREX {
 	defaultSampleDescriptionIndex: number;
 }
 
-export function trex({ trackId, defaultSampleDescriptionIndex }: TREX): Uint8Array {
+export function trex({ trackId, defaultSampleDescriptionIndex }: TREX): ArrayBuilder {
 	return box(
 		"trex",
 		verflag(0, 0),
@@ -414,7 +471,7 @@ interface MFHD {
 	sequenceNumber: number;
 }
 
-export function mfhd({ sequenceNumber }: MFHD): Uint8Array {
+export function mfhd({ sequenceNumber }: MFHD): ArrayBuilder {
 	return box(
 		"mfhd",
 		verflag(0, 0),
@@ -428,7 +485,7 @@ interface TFHD {
 	trackId: number;
 }
 
-export function tfhd({ trackId }: TFHD): Uint8Array {
+export function tfhd({ trackId }: TFHD): ArrayBuilder {
 	return box(
 		"tfhd",
 		verflag(0, 0x020000), // default-base-is-moof
@@ -440,7 +497,7 @@ interface TFDT {
 	baseMediaDecodeTime: number;
 }
 
-export function tfdt({ baseMediaDecodeTime }: TFDT): Uint8Array {
+export function tfdt({ baseMediaDecodeTime }: TFDT): ArrayBuilder {
 	return box(
 		"tfdt",
 		verflag(1, 0),
@@ -485,7 +542,7 @@ export interface TRUN {
 	}[];
 }
 
-export function trun({ dataOffset, samples }: TRUN): Uint8Array {
+export function trun({ dataOffset, samples }: TRUN): ArrayBuilder {
 	let flags = 0;
 
 	const hasCompositionTimeOffset = samples.some(sample => sample.compositionTimeOffset !== undefined);
@@ -505,7 +562,7 @@ export function trun({ dataOffset, samples }: TRUN): Uint8Array {
 		verflag(1, flags),
 		u32(samples.length), // sample count
 		dataOffset !== undefined ? u32(dataOffset) : [],
-		...samples.map(sample => arrayConcat(
+		...samples.map(sample => ArrayBuilder.concat(
 			u32(sample.duration),
 			u32(sample.size),
 			u32(sampleFlags(sample.sampleFlags ?? {})),

@@ -33,9 +33,13 @@ export class FetchBlobLike implements BlobLike {
 					headers: {
 						"Range": `bytes=${start}-${end - 1}`,
 					},
+					redirect: "follow",
 				});
 				if (!response.ok) {
 					throw new Error("Failed to fetch blob");
+				}
+				if (response.status !== 206) {
+					throw new Error("Server does not support range requests");
 				}
 				return await response.arrayBuffer();
 			}
@@ -43,23 +47,32 @@ export class FetchBlobLike implements BlobLike {
 	}
 
 	public slice(start: number = 0, end: number = this.size): BlobLike {
-		const size = end - start;
-		return new FetchBlobLike(this.url, end - start, this.offset + start, this.cacheBlockSize, this.cache);
+		end = Math.min(end, this.size);
+		return new FetchBlobLike(
+			this.url,
+			end - start,
+			this.offset + start,
+			this.cacheBlockSize,
+			this.cache,
+		);
 	}
 
 	public async arrayBuffer(): Promise<ArrayBuffer> {
-		const blockStart = Math.floor(this.offset / this.cacheBlockSize);
-		const blockEnd = Math.ceil((this.offset + this.size) / this.cacheBlockSize);
-		const blocks: ArrayBuffer[] = [];
-
-		for (let i = blockStart; i < blockEnd; i++) {
-			blocks.push((await this.cache.fetch(i))!);
+		const buffer = new Uint8Array(this.size);
+		let inOffset = this.offset;
+		let outOffset = 0;
+		while (outOffset < this.size) {
+			const blockIndex = Math.floor(inOffset / this.cacheBlockSize);
+			const blockOffset = inOffset % this.cacheBlockSize;
+			const block = (await this.cache.fetch(blockIndex))!;
+			const blockLength = Math.min(this.size - outOffset, block.byteLength - blockOffset);
+			buffer.set(
+				new Uint8Array(block, blockOffset, blockLength),
+				outOffset,
+			);
+			inOffset += blockLength;
+			outOffset += blockLength;
 		}
-
-		const blob = new Blob(blocks);
-		const sliceStart = this.offset % this.cacheBlockSize;
-		const sliceEnd = sliceStart + this.size;
-
-		return await blob.slice(sliceStart, sliceEnd).arrayBuffer();
+		return buffer.buffer as ArrayBuffer;
 	}
 }
