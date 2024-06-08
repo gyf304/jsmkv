@@ -71,7 +71,7 @@
 			fileInput.addEventListener("change", async () => {
 				const file = fileInput.files[0];
 				if (file) {
-					const player = new player.MKVVideoPlayer(file, document.getElementById("mkv-player"));
+					const mkvPlayer = new player.MKVVideoPlayer(file, document.getElementById("mkv-player"));
 				}
 			});
 		</script>
