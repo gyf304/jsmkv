@@ -1,7 +1,9 @@
 # jsmkv
 
 ## Demo
-To be added here
+[Demo (HTTP)](https://gyf304.github.io/jsmkv/demo-http.html): Video player streaming from a http/https server.
+
+[Demo (File)](https://gyf304.github.io/jsmkv/demo-file.html): Video player streaming from a file input.
 
 ## Description
 JSMKV is a in browser MKV (Matroska) file player and a suite of typescript
