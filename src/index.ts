@@ -1,4 +1,4 @@
-export * as vint from "./vint";
-export * as ebml from "./ebml";
-export * as mkv from "./matroska";
-export * as player from "./player";
+export * as vint from "./vint/index.js";
+export * as ebml from "./ebml/index.js";
+export * as mkv from "./matroska/index.js";
+export * as player from "./player/index.js";

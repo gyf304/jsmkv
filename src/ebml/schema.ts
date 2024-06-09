@@ -1,4 +1,4 @@
-import { Vint } from "../vint";
+import { Vint } from "../vint/index.js";
 import { Element, Stream } from "./base.js";
 
 type New<T> = T extends new (...args: any) => infer R ? R : never;

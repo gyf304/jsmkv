@@ -1,5 +1,5 @@
-import { BlobLike } from "../bloblike";
-import { Vint } from "../vint";
+import { BlobLike } from "../bloblike/index.js";
+import { Vint } from "../vint/index.js";
 
 export class Element {
 	constructor(public readonly id: Vint, public readonly dataSize: Vint, public readonly data: BlobLike) {

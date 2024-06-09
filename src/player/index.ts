@@ -1,7 +1,7 @@
-import * as ebml from "../ebml";
-import { BlobLike, FetchBlobLike } from "../bloblike";
-import { File } from "../matroska";
-import * as mkve from "../matroska/elements";
+import * as ebml from "../ebml/index.js";
+import { BlobLike, FetchBlobLike } from "../bloblike/index.js";
+import { File } from "../matroska/index.js";
+import * as mkve from "../matroska/elements/index.js";
 
 import * as m from "./box";
 
@@ -507,9 +507,48 @@ export class MKVToMP4Muxer {
 	}
 }
 
+class Signal<T> {
+	private resolve: ((value: T) => void) | undefined;
+	private reject: ((reason: any) => void) | undefined;
+
+	constructor() {}
+
+	public async wait(): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
+			this.resolve = resolve;
+			this.reject = reject;
+		});
+	}
+
+	public signal(value: T) {
+		if (this.resolve === undefined) {
+			throw new Error("Signal not waiting");
+		}
+		this.resolve(value);
+	}
+
+	public signalError(reason: any) {
+		if (this.reject === undefined) {
+			throw new Error("Signal not waiting");
+		}
+		this.reject(reason);
+	}
+}
+
 export class MKVVideoPlayer {
+	private destroyed = false;
+	private destroySignal = new Signal<void>();
+
 	constructor(private readonly source: BlobLike, private readonly video: HTMLVideoElement, private options?: Options) {
 		this.init();
+	}
+
+	public async destroy() {
+		if (this.destroyed) {
+			return;
+		}
+		this.destroyed = true;
+		await this.destroySignal.wait();
 	}
 
 	private async init() {
@@ -567,7 +606,7 @@ export class MKVVideoPlayer {
 			const stream = muxer.streamFrom(videoTime);
 
 			for await (const chunk of stream) {
-				if (seeked) {
+				if (seeked || this.destroyed) {
 					break;
 				}
 				const timeRanges: [number, number][] = [];
@@ -587,12 +626,12 @@ export class MKVVideoPlayer {
 				const currentTime = video.currentTime;
 				const currentTimeRange = timeRanges.find(([start, end]) => start <= currentTime && currentTime <= end);
 				while (currentTimeRange !== undefined && (video.currentTime + maxBufferSeconds) < currentTimeRange[1]) {
-					if (seeked) {
+					if (seeked || this.destroyed) {
 						break;
 					}
 					await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
 				}
-				if (seeked) {
+				if (seeked || this.destroyed) {
 					break;
 				}
 				sourceBuffer.appendBuffer(chunk);
@@ -618,17 +657,31 @@ export class MKVVideoPlayer {
 				}
 			}
 
+			if (this.destroyed) {
+				break;
+			}
+
 			// end of stream, wait for seek
 			while (!seeked) {
 				await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
 			}
 		}
+
+		// cleanup
+		video.removeEventListener("seeking", onSeeking);
+		mediaSource.endOfStream();
+		mediaSource.removeSourceBuffer(sourceBuffer);
+		video.src = "";
+		URL.revokeObjectURL(video.src);
+
+		this.destroySignal.signal();
 	}
 }
 
 export function polyfill() {
 	const mkvUrls = new Map<HTMLVideoElement, string>(); // video element -> source URL
-	setInterval(async () => {
+	const players = new Map<HTMLVideoElement, MKVVideoPlayer>(); // video element -> player
+	const runOnce = async () => {
 		const videos = document.querySelectorAll<HTMLVideoElement>("video.mkv-player");
 		const newVideos: [HTMLVideoElement, string][] = [];
 		for (const video of videos) {
@@ -647,12 +700,16 @@ export function polyfill() {
 			if (prevSource === mkvSource) {
 				continue;
 			}
+			players.get(video)?.destroy();
 			mkvUrls.set(video, mkvSource);
 			newVideos.push([video, mkvSource]);
 		}
 		for (const [video, mkvSource] of newVideos) {
 			const blobLike = await FetchBlobLike.fromUrl(mkvSource);
 			const player = new MKVVideoPlayer(blobLike, video);
+			players.set(video, player);
 		}
-	}, 1000);
+	};
+	runOnce();
+	setInterval(runOnce, 1000);
 }

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 import * as matroska from ".";
-import * as ebml from "../ebml";
+import * as ebml from "../ebml/index.js";
 
 let file: Blob;
 

@@ -1,4 +1,4 @@
-import { BlobLike } from "./base";
+import { BlobLike } from "./base.js";
 import { LRUCache } from "lru-cache";
 
 export class FetchBlobLike implements BlobLike {

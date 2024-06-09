@@ -1,2 +1,2 @@
-export * from "./base";
-export * from "./fetch";
+export * from "./base.js";
+export * from "./fetch.js";

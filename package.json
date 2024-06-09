@@ -1,22 +1,27 @@
 {
   "name": "jsmkv",
-  "module": "src/index.ts",
-  "type": "module",
+  "license": "MIT",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "dependencies": {
+    "lru-cache": "^10.2.2"
+  },
+  "files": [ "dist" ],
   "devDependencies": {
-    "@types/minimist": "^1.2.5",
     "@types/web": "^0.0.126",
     "bun-types": "latest",
-    "minimist": "^1.2.8",
-    "zod": "^3.22.4"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+    "npm": "^10.8.1",
+    "typescript": "^5.4.5"
   },
   "scripts": {
     "cli": "bun src/cli.ts",
-    "build:demo": "bun demo/build.ts"
+    "build:demo": "bun demo/build.ts",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:polyfill": "bun build --minify src/player/polyfill.ts > dist/polyfill.js",
+    "build": "rm -rf dist && bun run build:cjs && bun run build:esm && bun run build:polyfill && rm dist/*.tsbuildinfo",
+    "npm:publish": "bun run build && npm publish --dry-run"
   },
-  "dependencies": {
-    "lru-cache": "^10.2.2"
-  }
+  "type": "module"
 }

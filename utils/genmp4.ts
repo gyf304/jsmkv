@@ -1,7 +1,8 @@
-import { MKVToMP4Muxer } from "./index";
+import { MKVToMP4Muxer } from "../src/player/index.js";
 
 const filename = process.argv[2];
 const outputFilename = process.argv[3];
+
 const file = new Blob([await Bun.file(filename).arrayBuffer()]);
 const outputFile = Bun.file(outputFilename);
 

@@ -1,5 +1,5 @@
-import * as ebml from "../ebml";
-import * as elements from "./elements";
+import * as ebml from "../ebml/index.js";
+import * as elements from "./elements/index.js";
 
 export class File extends ebml.SchemaStream {
 	public static readonly knownChildren = [elements.EBMLHead, elements.Segment];
