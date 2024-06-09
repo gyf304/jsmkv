@@ -1,4 +1,4 @@
-import type { Segment } from "./index.js";
+import { Cluster, Cues, Info, Tags, Tracks, type Segment } from "./index.js";
 import * as ebml from "../../ebml/index.js";
 
 export class Seek extends ebml.SchemaElement {
@@ -61,17 +61,20 @@ export class SeekPosition extends ebml.UintElement {
 		const segment = this.parent.parent.parent;
 		const blob = segment.element.data.slice(position);
 		const el = await ebml.Element.fromBlob(blob);
-		const indexImport = await import("./index.js");
-		const elementTypes = Object.values(indexImport).filter((v) => v instanceof Function);
+		const elementTypes = [
+			SeekHead,
+			Info,
+			Cluster,
+			Tracks,
+			Cues,
+			Tags,
+		] as const;
 		for (const elementType of elementTypes) {
 			if (elementType.id === el.id.id) {
-				if (elementType.level !== 1) {
-					throw new Error(`Cannot reference element that is not a child of Segment`);
-				}
 				return new elementType(el, segment);
 			}
 		}
-		throw new Error(`Unknown element type ${el.id.toString()}`);
+		throw new Error(`Unknown element type ${el.id.toString()}, at position ${position}`);
 	}
 
 	public get referencedElement(): Promise<ebml.SchemaElement> {

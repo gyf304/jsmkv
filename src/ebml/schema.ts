@@ -209,28 +209,32 @@ export abstract class UTF8Element extends SchemaElement {
 export abstract class UintElement extends SchemaElement {
 	public static readonly leaf = true;
 
-	private cachedValue?: number;
+	private cachedValue?: bigint;
 
-	private async getValue(): Promise<number> {
+	private async getBigintValue(): Promise<bigint> {
 		if (this.cachedValue !== undefined) {
 			return this.cachedValue;
 		}
 		const data = await this.element.data.arrayBuffer();
 		const u8 = new Uint8Array(data);
-		let n = 0;
+		let n = 0n;
 		for (let i = 0; i < u8.length; i++) {
-			n = (n << 8) | u8[i];
+			n = (n << 8n) | BigInt(u8[i]);
 		}
 		this.cachedValue = n;
 		return n;
 	}
 
 	public get value(): Promise<number> {
-		return this.getValue();
+		return this.getBigintValue().then(n => Number(n));
+	}
+
+	public get bigIntValue(): Promise<bigint> {
+		return this.getBigintValue();
 	}
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
-		const n = await this.getValue();
+		const n = await this.getBigintValue();
 		return [`${curIndent}<${this.constructor.name}>${n}</${this.constructor.name}>\n`];
 	}
 }
