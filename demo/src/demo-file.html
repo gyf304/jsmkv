@@ -66,11 +66,12 @@
 			</div>
 		</div>
 		<script type="module">
-			import { player } from "./index.js";
+			import { player, bloblike } from "./index.js";
 			const fileInput = document.getElementById("file-input");
 			fileInput.addEventListener("change", async () => {
-				const file = fileInput.files[0];
+				let file = fileInput.files[0];
 				if (file) {
+					file = new bloblike.CacheBlobLike(file);
 					const mkvPlayer = new player.MKVVideoPlayer(file, document.getElementById("mkv-player"));
 				}
 			});

@@ -26,6 +26,7 @@ interface Track {
 	mkvTrackNumber: number;
 	mp4TrackId: number;
 	trak: m.ArrayBuilder;
+	contentEncodings?: mkve.ContentEncodings;
 }
 
 function bitReverse32(n: number) {
@@ -80,6 +81,8 @@ export class MKVToMP4Muxer {
 	private mkvSegment: mkve.Segment | undefined;
 	private mimeType: string | undefined;
 	private seeks: SeekCluster[] | undefined;
+
+	private mkvTracks: Map<number, Track> = new Map();
 
 	constructor(private readonly source: BlobLike) {}
 
@@ -151,7 +154,7 @@ export class MKVToMP4Muxer {
 				}
 			}
 
-			const trackNumbers = Array.from(blocksByTrack.keys()).sort();
+			const trackNumbers = Array.from(this.mkvTracks.keys());
 
 			const trackData: {
 				trackNumber: number;
@@ -159,7 +162,10 @@ export class MKVToMP4Muxer {
 				data: m.ArrayBuilder,
 			}[] = [];
 			for (const trackNumber of trackNumbers) {
-				const blocks = blocksByTrack.get(trackNumber)!;
+				const track = this.mkvTracks.get(trackNumber)!;
+				const mp4TrackId = track.mp4TrackId;
+
+				const blocks = blocksByTrack.get(trackNumber) ?? [];
 				const samples: m.TRUN["samples"] = [];
 				const dataParts: m.ArrayBuilderPart[] = [];
 
@@ -199,7 +205,10 @@ export class MKVToMP4Muxer {
 					}
 
 					const keyframe = await block.keyframe;
-					const data = await block.data;
+					let data = await block.data;
+					if (track.contentEncodings !== undefined) {
+						data = await track.contentEncodings.decode(data);
+					}
 
 					dataParts.push(new Uint8Array(data));
 					samples.push({
@@ -214,7 +223,7 @@ export class MKVToMP4Muxer {
 
 				const traf = (offset: number) => m.traf(
 					m.tfhd({
-						trackId: trackNumber,
+						trackId: mp4TrackId,
 					}),
 					m.tfdt({
 						baseMediaDecodeTime: clusterTimestamp + (blocksFirstTimestamps.get(trackNumber) ?? 0),
@@ -366,7 +375,8 @@ export class MKVToMP4Muxer {
 									),
 								),
 							)
-						)
+						),
+						contentEncodings: await track.maybeOne(mkve.ContentEncodings),
 					});
 					hasVideo = true;
 					break;
@@ -434,7 +444,8 @@ export class MKVToMP4Muxer {
 									),
 								),
 							)
-						)
+						),
+						contentEncodings: await track.maybeOne(mkve.ContentEncodings),
 					});
 					hasAudio = true;
 					break;
@@ -449,9 +460,8 @@ export class MKVToMP4Muxer {
 			throw new Error("Video track not found");
 		}
 
-		const mkvTrackNumberToConvertedTrack = new Map<number, Track>();
 		for (const track of convertedTracks) {
-			mkvTrackNumberToConvertedTrack.set(track.mkvTrackNumber, track);
+			this.mkvTracks.set(track.mkvTrackNumber, track);
 		}
 
 		let mimeCodecs: string[] = [];
@@ -555,6 +565,7 @@ export class MKVVideoPlayer {
 		// initialize muxer
 		const muxer = new MKVToMP4Muxer(this.source);
 		const mimeType = await muxer.getMimeType();
+		console.log("MIME type:", mimeType);
 		const durationSeconds = await muxer.getDuration();
 		const initSegment = await muxer.getInitiationSegment();
 
@@ -591,7 +602,7 @@ export class MKVVideoPlayer {
 		sourceBuffer.appendBuffer(initSegment);
 		await waitForSourceBuffer();
 
-		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 30;
+		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 60;
 
 		let seeked = true;
 		const onSeeking = () => {

@@ -13,16 +13,8 @@ export class Tracks extends ebml.SchemaElement {
 		super(element);
 	}
 
-	private async *tracksGenerator(): AsyncGenerator<TrackEntry> {
-		for await (const child of this.element.children) {
-			if (child.id.id === TrackEntry.id) {
-				yield new TrackEntry(child, this);
-			}
-		}
-	}
-
 	public get tracks(): AsyncGenerator<TrackEntry> {
-		return this.tracksGenerator();
+		return this.many(TrackEntry);
 	}
 }
 
@@ -44,6 +36,7 @@ export class TrackEntry extends ebml.SchemaElement {
 			CodecName,
 			Video,
 			Audio,
+			ContentEncodings,
 		];
 	}
 
@@ -85,6 +78,26 @@ export class TrackEntry extends ebml.SchemaElement {
 
 	public get audio() {
 		return this.maybeOne(Audio);
+	}
+
+	public get codecPrivate() {
+		return this.maybeOne(CodecPrivate).then(v => v === undefined ? undefined : v.value);
+	}
+
+	public get codecName() {
+		return this.maybeOne(CodecName).then(v => v === undefined ? undefined : v.value);
+	}
+
+	private async getContentEncodings(): Promise<AsyncGenerator<ContentEncoding> | undefined> {
+		const contentEncodings = await this.maybeOne(ContentEncodings);
+		if (contentEncodings === undefined) {
+			return undefined;
+		}
+		return contentEncodings.many(ContentEncoding);
+	}
+
+	public get contentEncodings() {
+		return this.getContentEncodings();
 	}
 }
 
@@ -187,6 +200,237 @@ export class Language extends ebml.UTF8Element {
 	public static readonly name = "Language";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
+		super(element);
+	}
+}
+
+export class ContentEncodings extends ebml.SchemaElement {
+	public static readonly id = 0x6d80;
+	public static readonly level = 3;
+	public static readonly name = "ContentEncodings";
+	public static get knownChildren() {
+		return [ContentEncoding];
+	}
+	private cachedOrderedEncodings?: ContentEncoding[];
+
+	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
+		super(element);
+	}
+
+	public get contentEncodings(): AsyncGenerator<ContentEncoding> {
+		return this.many(ContentEncoding);
+	}
+
+	public async decode(data: ArrayBuffer): Promise<ArrayBuffer> {
+		if (this.cachedOrderedEncodings === undefined) {
+			const encodings = new Map<number, ContentEncoding>();
+			for await (const encoding of this.contentEncodings) {
+				const order = await encoding.order;
+				encodings.set(order ?? 0, encoding);
+			}
+			const orderedEncodings = Array.from(encodings.entries())
+				.sort(([a], [b]) => a - b).map(([, encoding]) => encoding);
+			this.cachedOrderedEncodings = orderedEncodings;
+		}
+		for (const encoding of this.cachedOrderedEncodings) {
+			data = await encoding.decode(data);
+		}
+		return data;
+	}
+}
+
+export class ContentEncoding extends ebml.SchemaElement {
+	public static readonly id = 0x6240;
+	public static readonly level = 4;
+	public static readonly name = "ContentEncoding";
+	public static get knownChildren() {
+		return [
+			ContentEncodingOrder,
+			ContentEncodingScope,
+			ContentEncodingType,
+			ContentCompression,
+			ContentEncryption,
+		];
+	}
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncodings) {
+		super(element);
+	}
+
+	public get order() {
+		return this.maybeOne(ContentEncodingOrder).then(v => v?.value);
+	}
+
+	public get scope() {
+		return this.one(ContentEncodingScope).then(v => v.value);
+	}
+
+	public get type() {
+		return this.cached("type", () => this.maybeOne(ContentEncodingType).then(v => v?.type));
+	}
+
+	public get compression() {
+		return this.cached("compression", () => this.maybeOne(ContentCompression));
+	}
+
+	public get encryption() {
+		return this.maybeOne(ContentEncryption);
+	}
+
+	public async decode(data: ArrayBuffer): Promise<ArrayBuffer> {
+		const type = (await this.type) ?? "compression";
+		if (type === "compression") {
+			const compression = await this.compression;
+			if (compression === undefined) {
+				return data;
+			}
+			return compression.decompress(data);
+		} else {
+			throw new Error(`Unimplemented ContentEncodingType ${type}`);
+		}
+	}
+}
+
+export class ContentEncodingOrder extends ebml.UintElement {
+	public static readonly id = 0x5031;
+	public static readonly level = 5;
+	public static readonly name = "ContentEncodingOrder";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
+		super(element);
+	}
+}
+
+type ContentEncodingScopeValue = "block" | "private" | "next";
+
+export class ContentEncodingScope extends ebml.UintElement {
+	public static readonly id = 0x5032;
+	public static readonly level = 5;
+	public static readonly name = "ContentEncodingScope";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
+		super(element);
+	}
+
+	private async getScope(): Promise<Set<ContentEncodingScopeValue>> {
+		const value = await this.value;
+		const set = new Set<ContentEncodingScopeValue>();
+		if (value & 1) {
+			set.add("block");
+		}
+		if (value & 2) {
+			set.add("private");
+		}
+		if (value & 4) {
+			set.add("next");
+		}
+		return set;
+	}
+
+	public get scope(): Promise<Set<ContentEncodingScopeValue>> {
+		return this.getScope();
+	}
+}
+
+export class ContentEncodingType extends ebml.UintElement {
+	public static readonly id = 0x5033;
+	public static readonly level = 5;
+	public static readonly name = "ContentEncodingType";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
+		super(element);
+	}
+
+	private async getType(): Promise<"compression" | "encryption"> {
+		const value = await this.value;
+		if (value === 0) {
+			return "compression";
+		} else if (value === 1) {
+			return "encryption";
+		} else {
+			throw new Error(`Unknown ContentEncodingType value ${value}`);
+		}
+	}
+
+	public get type(): Promise<"compression" | "encryption"> {
+		return this.getType();
+	}
+}
+
+export class ContentCompression extends ebml.SchemaElement {
+	public static readonly id = 0x5034;
+	public static readonly level = 5;
+	public static readonly name = "ContentCompression";
+	public static get knownChildren() {
+		return [ContentCompAlgo, ContentCompSettings];
+	}
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
+		super(element);
+	}
+
+	public get algo() {
+		return this.one(ContentCompAlgo).then(v => v.algo);
+	}
+
+	public get settings() {
+		return this.one(ContentCompSettings).then(v => v.value);
+	}
+
+	public async decompress(data: ArrayBuffer): Promise<ArrayBuffer> {
+		const algo = await this.algo;
+		if (algo === "headerStripping") {
+			const setting = await this.settings;
+			// join setting with data
+			const concat = new Uint8Array(setting.byteLength + data.byteLength);
+			concat.set(new Uint8Array(setting), 0);
+			concat.set(new Uint8Array(data), setting.byteLength);
+			return concat.buffer as ArrayBuffer;
+		} else {
+			throw new Error(`Unimplemented compression algorithm ${algo}`);
+		}
+	}
+}
+
+type ContentCompAlgoValue = "zlib" | "bzlib" | "lzo1x" | "headerStripping";
+export class ContentCompAlgo extends ebml.UintElement {
+	public static readonly id = 0x4254;
+	public static readonly level = 6;
+	public static readonly name = "ContentCompAlgo";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
+		super(element);
+	}
+
+	private async getAlgo(): Promise<ContentCompAlgoValue> {
+		const value = await this.value;
+		return (["zlib", "bzlib", "lzo1x", "headerStripping"] as const)[value];
+	}
+
+	public get algo(): Promise<ContentCompAlgoValue> {
+		return this.getAlgo();
+	}
+}
+
+export class ContentCompSettings extends ebml.BytesElement {
+	public static readonly id = 0x4255;
+	public static readonly level = 6;
+	public static readonly name = "ContentCompSettings";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
+		super(element);
+	}
+}
+
+export class ContentEncryption extends ebml.SchemaElement {
+	public static readonly id = 0x5035;
+	public static readonly level = 5;
+	public static readonly name = "ContentEncryption";
+	public static get knownChildren() {
+		return [];
+	}
+
+	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
 		super(element);
 	}
 }

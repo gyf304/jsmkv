@@ -219,12 +219,23 @@ export class SimpleBlock extends ebml.SchemaElement {
 			const blob = this.element.data.slice(prevSize);
 			const sizes: number[] = [];
 			let offset = 0;
-			for (let i = 0; i < frameCount - 1; i++) {
+			let sizeSum = 0;
+			// first frame
+			const firstVint = await Vint.fromBlob(blob.slice(offset));
+			sizes.push(firstVint.number);
+			offset += firstVint.size;
+			sizeSum += firstVint.number;
+			for (let i = 1; i < frameCount - 1; i++) {
+				// other frames
 				const vint = await Vint.fromBlob(blob.slice(offset));
-				sizes.push(vint.number);
+				const vintNumber = vint.number;
+				const signed = vintNumber - ((2 ** (7 * vint.size - 1)) - 1);
+				const size = sizes[i - 1] + signed;
+				sizes.push(size);
 				offset += vint.size;
+				sizeSum += size;
 			}
-			const remainingSize = blob.size - offset;
+			const remainingSize = blob.size - offset - sizeSum;
 			sizes.push(remainingSize);
 			this.cachedFrameSizes = sizes;
 			this.cachedFrameSizesSize = offset;
@@ -249,12 +260,11 @@ export class SimpleBlock extends ebml.SchemaElement {
 	}
 
 	public get data(): Promise<ArrayBuffer> {
-		return this.getFrameSizes().then(sizes => {
-			const sizeSum = sizes.reduce((sum, size) => sum + size, 0);
+		return this.getFrameSizes().then((sizes) => {
 			let offset = this.cachedTrackNumberSize! + this.cachedTimestampSize
 				+ this.cachedHeaderFlagsSize + this.cachedFrameCountSize!
 				+ this.cachedFrameSizesSize!;
-			return this.element.data.slice(offset, offset + sizeSum).arrayBuffer();
+			return this.element.data.slice(offset).arrayBuffer();
 		});
 	}
 

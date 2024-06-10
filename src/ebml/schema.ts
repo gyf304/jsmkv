@@ -18,6 +18,8 @@ export abstract class SchemaElement {
 	private static cachedKnownChildrenMap?: Map<number, SchemaElementConstructor> = new Map();
 	private _constructor: typeof SchemaElement;
 
+	private cache: Map<string, unknown> = new Map();
+
 	constructor(public readonly element: Element, public readonly parent?: SchemaElement) {
 		this._constructor = this.constructor as typeof SchemaElement;
 
@@ -34,6 +36,15 @@ export abstract class SchemaElement {
 				throw new Error(`${thisName} (level ${thisLevel}) cannot be a child of ${parentName} (level ${parentLevel})`);
 			}
 		}
+	}
+
+	public async cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+		if (this.cache.has(key)) {
+			return this.cache.get(key) as T;
+		}
+		const value = fn();
+		this.cache.set(key, value);
+		return value;
 	}
 
 	// instance accessors of public static members
