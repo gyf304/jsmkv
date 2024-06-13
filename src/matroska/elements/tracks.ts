@@ -266,7 +266,7 @@ export class ContentEncoding extends ebml.SchemaElement {
 	}
 
 	public get type() {
-		return this.cached("type", () => this.maybeOne(ContentEncodingType).then(v => v?.type));
+		return this.cached("type", () => this.maybeOne(ContentEncodingType).then(v => v?.value));
 	}
 
 	public get compression() {
@@ -301,59 +301,28 @@ export class ContentEncodingOrder extends ebml.UintElement {
 	}
 }
 
-type ContentEncodingScopeValue = "block" | "private" | "next";
+const ContentEncodingScopeValues = ["block", "private", "next"] as const;
 
-export class ContentEncodingScope extends ebml.UintElement {
+export class ContentEncodingScope extends ebml.EnumElement<typeof ContentEncodingScopeValues[number]> {
 	public static readonly id = 0x5032;
 	public static readonly level = 5;
 	public static readonly name = "ContentEncodingScope";
+	public static readonly values = ContentEncodingScopeValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
 		super(element);
-	}
-
-	private async getScope(): Promise<Set<ContentEncodingScopeValue>> {
-		const value = await this.value;
-		const set = new Set<ContentEncodingScopeValue>();
-		if (value & 1) {
-			set.add("block");
-		}
-		if (value & 2) {
-			set.add("private");
-		}
-		if (value & 4) {
-			set.add("next");
-		}
-		return set;
-	}
-
-	public get scope(): Promise<Set<ContentEncodingScopeValue>> {
-		return this.getScope();
 	}
 }
 
-export class ContentEncodingType extends ebml.UintElement {
+const ContentEncodingTypeValues = ["compression", "encryption"] as const;
+export class ContentEncodingType extends ebml.EnumElement<typeof ContentEncodingTypeValues[number]> {
 	public static readonly id = 0x5033;
 	public static readonly level = 5;
 	public static readonly name = "ContentEncodingType";
+	public static readonly values = ContentEncodingTypeValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
 		super(element);
-	}
-
-	private async getType(): Promise<"compression" | "encryption"> {
-		const value = await this.value;
-		if (value === 0) {
-			return "compression";
-		} else if (value === 1) {
-			return "encryption";
-		} else {
-			throw new Error(`Unknown ContentEncodingType value ${value}`);
-		}
-	}
-
-	public get type(): Promise<"compression" | "encryption"> {
-		return this.getType();
 	}
 }
 
@@ -370,7 +339,7 @@ export class ContentCompression extends ebml.SchemaElement {
 	}
 
 	public get algo() {
-		return this.one(ContentCompAlgo).then(v => v.algo);
+		return this.one(ContentCompAlgo).then(v => v.value);
 	}
 
 	public get settings() {
@@ -392,23 +361,15 @@ export class ContentCompression extends ebml.SchemaElement {
 	}
 }
 
-type ContentCompAlgoValue = "zlib" | "bzlib" | "lzo1x" | "headerStripping";
-export class ContentCompAlgo extends ebml.UintElement {
+const ContentCompAlgoValues = ["zlib", "bzlib", "lzo1x", "headerStripping"] as const;
+export class ContentCompAlgo extends ebml.EnumElement<typeof ContentCompAlgoValues[number]> {
 	public static readonly id = 0x4254;
 	public static readonly level = 6;
 	public static readonly name = "ContentCompAlgo";
+	public static readonly values = ContentCompAlgoValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
 		super(element);
-	}
-
-	private async getAlgo(): Promise<ContentCompAlgoValue> {
-		const value = await this.value;
-		return (["zlib", "bzlib", "lzo1x", "headerStripping"] as const)[value];
-	}
-
-	public get algo(): Promise<ContentCompAlgoValue> {
-		return this.getAlgo();
 	}
 }
 

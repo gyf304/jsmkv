@@ -180,12 +180,8 @@ export class MKVToMP4Muxer {
 
 				// make DTS monotonic
 				let dtses = ptses.slice();
-				let max = 0;
-				for (let i = 1; i < dtses.length; i++) {
-					if (dtses[i] < dtses[i-1]) {
-						max = Math.max(max, dtses[i-1]);
-						dtses[i] = max;
-					}
+				for (let i = dtses.length - 1; i >= 1; i--) {
+					dtses[i-1] = Math.min(dtses[i-1], dtses[i]);
 				}
 
 				const durations: number[] = [];
@@ -216,7 +212,7 @@ export class MKVToMP4Muxer {
 						size: data.byteLength,
 						compositionTimeOffset: pts - dts,
 						sampleFlags: {
-							dependsOn: keyframe ? 2 : 1,
+							dependsOn: (keyframe || i === 0) ? 2 : 1,
 						},
 					});
 				}

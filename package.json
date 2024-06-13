@@ -19,7 +19,7 @@
     "build:demo": "bun demo/build.ts",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:polyfill": "bun build --minify --sourcemap src/player/polyfill.ts > dist/polyfill.js",
+    "build:polyfill": "bun build --minify src/player/polyfill.ts > dist/polyfill.js",
     "build": "rm -rf dist && bun run build:cjs && bun run build:esm && bun run build:polyfill && rm dist/*.tsbuildinfo",
     "npm:publish": "bun run build && npm publish --dry-run"
   },

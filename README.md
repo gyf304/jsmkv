@@ -1,5 +1,12 @@
 # jsmkv
 
+JSMKV is a in browser MKV (Matroska) file player and a suite of typescript
+tools for working with Matroska files.
+
+P.S. this is not a production ready library. It should be considered a proof of concept.
+
+P.P.S. If someone can recommend me a good MP4 validator, I would be very grateful.
+
 ## Demo
 [Demo (HTTP)](https://gyf304.github.io/jsmkv/demo-http.html): Video player streaming from a http/https server.
 
@@ -12,12 +19,3 @@
 - The player does not (yet) support subtitles.
 - The library does not support all matroska features. e.g. videos not using
   SimpleBlock elements will not play.
-
-## Description
-JSMKV is a in browser MKV (Matroska) file player and a suite of typescript
-tools for working with Matroska files.
-
-It includes:
-- A browser based MKV player
-- A Matroska file parser
-- A Generic EBML parser / writer

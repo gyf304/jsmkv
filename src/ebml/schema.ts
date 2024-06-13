@@ -356,6 +356,62 @@ export abstract class VintElement extends SchemaElement {
 	}
 }
 
+export abstract class EnumElement<T extends string> extends SchemaElement {
+	public static readonly leaf = true;
+	public static readonly values: readonly string[];
+
+	private cachedValue?: number;
+
+	private async getValue(): Promise<number> {
+		if (this.cachedValue !== undefined) {
+			return this.cachedValue;
+		}
+		const data = await this.element.data.arrayBuffer();
+		const u8 = new Uint8Array(data);
+		let n = 0;
+		for (let i = 0; i < u8.length; i++) {
+			n = (n << 8) | u8[i];
+		}
+		return n;
+	}
+
+	public get value(): Promise<T> {
+		return this.getValue().then(n => (this.constructor as typeof EnumElement).values[n] as T);
+	}
+}
+
+export abstract class BitMaskElement<T extends string> extends SchemaElement {
+	public static readonly leaf = true;
+	public static readonly values: readonly (string | undefined)[];
+
+	private cachedValue?: number;
+
+	private async getValue(): Promise<number> {
+		if (this.cachedValue !== undefined) {
+			return this.cachedValue;
+		}
+		const data = await this.element.data.arrayBuffer();
+		const u8 = new Uint8Array(data);
+		let n = 0;
+		for (let i = 0; i < u8.length; i++) {
+			n = (n << 8) | u8[i];
+		}
+		return n;
+	}
+
+	public get value(): Promise<Set<T>> {
+		return this.getValue().then(n => {
+			const values: Set<T> = new Set();
+			for (let i = 0; i < 8; i++) {
+				if ((n & (1 << i)) !== 0) {
+					values.add((this.constructor as typeof BitMaskElement).values[i] as T);
+				}
+			}
+			return values;
+		});
+	}
+}
+
 interface FindOptions {
 	before?: typeof SchemaElement;
 }
