@@ -12,8 +12,8 @@ const outputFile = Bun.file(outputFilename);
 const writer = outputFile.writer();
 
 const muxer = new MKVToMP4Muxer(file);
-const initializationSegment = await muxer.getInitiationSegment();
-writer.write(initializationSegment);
+const initSegment = await muxer.getInitSegment();
+writer.write(initSegment);
 await writer.flush();
 
 for await (const chunk of muxer.streamFrom(0)) {

@@ -74,7 +74,7 @@ async function *withNextAsync<T>(iterable: AsyncIterable<T>): AsyncIterable<[T, 
 
 export class MKVToMP4Muxer {
 	private initPromise: Promise<void> | undefined;
-	private initializationSegment: ArrayBuffer | undefined;
+	private initSegment: ArrayBuffer | undefined;
 
 	private duration: number | undefined;
 	private mkvDuration: number | undefined;
@@ -86,9 +86,9 @@ export class MKVToMP4Muxer {
 
 	constructor(private readonly source: BlobLike) {}
 
-	public async getInitiationSegment(): Promise<ArrayBuffer> {
+	public async getInitSegment(): Promise<ArrayBuffer> {
 		await this.init();
-		return this.initializationSegment!;
+		return this.initSegment!;
 	}
 
 	public async getMimeType(): Promise<string> {
@@ -487,7 +487,7 @@ export class MKVToMP4Muxer {
 		this.seeks = seeks;
 
 		// initialize header
-		const initializationSegment = m.ArrayBuilder.concat(
+		const initSegment = m.ArrayBuilder.concat(
 			m.ftyp({
 				majorBrand: "isom",
 				minorVersion: 0,
@@ -509,7 +509,7 @@ export class MKVToMP4Muxer {
 			),
 		);
 
-		this.initializationSegment = initializationSegment.valueOf().buffer as ArrayBuffer;
+		this.initSegment = initSegment.valueOf().buffer as ArrayBuffer;
 	}
 }
 
@@ -563,7 +563,7 @@ export class MKVVideoPlayer {
 		const mimeType = await muxer.getMimeType();
 		console.log("MIME type:", mimeType);
 		const durationSeconds = await muxer.getDuration();
-		const initSegment = await muxer.getInitiationSegment();
+		const initSegment = await muxer.getInitSegment();
 
 		// initialize video element and media source
 		const video = this.video;
