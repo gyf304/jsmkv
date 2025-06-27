@@ -4,7 +4,7 @@ import * as ebml from "../../ebml/index.js";
 export class Seek extends ebml.SchemaElement {
 	public static readonly id = 0x4dbb;
 	public static readonly level = 2;
-	public static readonly name = "Seek";
+	public static readonly displayName = "Seek";
 	public static get knownChildren() {
 		return [SeekID, SeekPosition];
 	}
@@ -25,7 +25,7 @@ export class Seek extends ebml.SchemaElement {
 export class SeekHead extends ebml.SchemaElement {
 	public static readonly id = 0x114d9b74;
 	public static readonly level = 1;
-	public static readonly name = "SeekHead";
+	public static readonly displayName = "SeekHead";
 	public static readonly knownChildren = [Seek];
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
@@ -40,7 +40,7 @@ export class SeekHead extends ebml.SchemaElement {
 export class SeekID extends ebml.VintElement {
 	public static readonly id = 0x53ab;
 	public static readonly level = 3;
-	public static readonly name = "SeekID";
+	public static readonly displayName = "SeekID";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Seek) {
 		super(element);
@@ -50,7 +50,7 @@ export class SeekID extends ebml.VintElement {
 export class SeekPosition extends ebml.UintElement {
 	public static readonly id = 0x53ac;
 	public static readonly level = 3;
-	public static readonly name = "SeekPosition";
+	public static readonly displayName = "SeekPosition";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Seek) {
 		super(element);

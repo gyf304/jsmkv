@@ -5,7 +5,7 @@ import { Cluster } from "./cluster.js";
 export class Cues extends ebml.SchemaElement {
 	public static readonly id = 0x1c53bb6b;
 	public static readonly level = 1;
-	public static readonly name = "Cues";
+	public static readonly displayName = "Cues";
 	public static get knownChildren() {
 		return [CuePoint];
 	}
@@ -22,7 +22,7 @@ export class Cues extends ebml.SchemaElement {
 export class CuePoint extends ebml.SchemaElement {
 	public static readonly id = 0xbb;
 	public static readonly level = 2;
-	public static readonly name = "CuePoint";
+	public static readonly displayName = "CuePoint";
 	public static get knownChildren() {
 		return [CueTime, CueTrackPositions];
 	}
@@ -43,7 +43,7 @@ export class CuePoint extends ebml.SchemaElement {
 export class CueTime extends ebml.UintElement {
 	public static readonly id = 0xb3;
 	public static readonly level = 3;
-	public static readonly name = "CueTime";
+	public static readonly displayName = "CueTime";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CuePoint) {
 		super(element);
@@ -53,7 +53,7 @@ export class CueTime extends ebml.UintElement {
 export class CueTrackPositions extends ebml.SchemaElement {
 	public static readonly id = 0xb7;
 	public static readonly level = 3;
-	public static readonly name = "CueTrackPositions";
+	public static readonly displayName = "CueTrackPositions";
 	public static get knownChildren() {
 		return [CueTrack, CueClusterPosition, CueRelativePosition, CueDuration];
 	}
@@ -73,7 +73,7 @@ export class CueTrackPositions extends ebml.SchemaElement {
 export class CueTrack extends ebml.UintElement {
 	public static readonly id = 0xf7;
 	public static readonly level = 4;
-	public static readonly name = "CueTrack";
+	public static readonly displayName = "CueTrack";
 
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
@@ -84,7 +84,7 @@ export class CueTrack extends ebml.UintElement {
 export class CueClusterPosition extends ebml.UintElement {
 	public static readonly id = 0xf1;
 	public static readonly level = 4;
-	public static readonly name = "CueClusterPosition";
+	public static readonly displayName = "CueClusterPosition";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
 		super(element);
@@ -106,7 +106,7 @@ export class CueClusterPosition extends ebml.UintElement {
 export class CueRelativePosition extends ebml.UintElement {
 	public static readonly id = 0xf0;
 	public static readonly level = 4;
-	public static readonly name = "CueRelativePosition";
+	public static readonly displayName = "CueRelativePosition";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
 		super(element);
@@ -116,7 +116,7 @@ export class CueRelativePosition extends ebml.UintElement {
 export class CueDuration extends ebml.UintElement {
 	public static readonly id = 0xb2;
 	public static readonly level = 4;
-	public static readonly name = "CueDuration";
+	public static readonly displayName = "CueDuration";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
 		super(element);
