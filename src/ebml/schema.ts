@@ -8,7 +8,7 @@ export abstract class SchemaElement {
 	// static members
 	public static readonly id: number;
 	public static readonly level?: number; // undefined means any level
-	public static readonly name: string;
+	public static readonly displayName: string;
 	public static readonly knownChildren: SchemaElementConstructor[] = [];
 	public static readonly mandatory: boolean = false;
 	public static readonly multiple: boolean = true;
@@ -24,12 +24,12 @@ export abstract class SchemaElement {
 		this._constructor = this.constructor as typeof SchemaElement;
 
 		const expectedID: number = (this as any).constructor.id;
-		const thisName: string = this.constructor.name;
+		const thisName: string = this._constructor.displayName;
 		if (this.element.id.id !== expectedID && expectedID !== 0) {
 			throw new Error(`Expected ID ${(this as any).constructor.id}`);
 		}
 		if (parent !== undefined) {
-			const parentName = parent.constructor.name;
+			const parentName = parent._constructor.displayName;
 			const thisLevel = (this as any).constructor.level;
 			const parentLevel = (parent as any).constructor.level;
 			if (thisLevel !== undefined && thisLevel !== parentLevel + 1) {
@@ -57,7 +57,7 @@ export abstract class SchemaElement {
 	}
 
 	public get name(): string {
-		return this._constructor.name;
+		return this._constructor.displayName;
 	}
 
 	public get knownChildren(): SchemaElementConstructor[] {
@@ -109,7 +109,7 @@ export abstract class SchemaElement {
 	}
 
 	public toString(): string {
-		const name = this.constructor.name;
+		const name = this._constructor.displayName;
 		if (this.leaf) {
 			return `<${name} size="${this.element.size}" dataSize="${this.element.dataSize.number}" />`
 		}
@@ -157,11 +157,11 @@ export abstract class SchemaElement {
 		let parts: string[] = [];
 		const stream = this.stream;
 		if (stream !== undefined) {
-			parts.push(`${curIndent}<${this.constructor.name}>\n`);
+			parts.push(`${curIndent}<${this._constructor.displayName}>\n`);
 			parts.push(...await stream.toXMLParts(maxLevel, indent, nextIndent));
-			parts.push(`${curIndent}</${this.constructor.name}>\n`);
+			parts.push(`${curIndent}</${this._constructor.displayName}>\n`);
 		} else {
-			parts.push(`${curIndent}<${this.constructor.name} />\n`);
+			parts.push(`${curIndent}<${this._constructor.displayName} />\n`);
 		}
 
 		return parts;
@@ -176,7 +176,7 @@ export abstract class SchemaElement {
 export class UnknownElement extends SchemaElement {
 	public static readonly id = 0;
 	public static readonly level = undefined;
-	public static readonly name = "Unknown";
+	public static readonly displayName = "Unknown";
 
 	constructor(public readonly element: Element, public readonly parent?: SchemaElement) {
 		super(element, parent);
@@ -213,7 +213,7 @@ export abstract class UTF8Element extends SchemaElement {
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		const text = await this.getValue();
-		return [`${curIndent}<${this.constructor.name}>${text}</${this.constructor.name}>\n`]; // TODO: proper escaping
+		return [`${curIndent}<${this.name}>${text}</${this.name}>\n`]; // TODO: proper escaping
 	}
 }
 
@@ -246,7 +246,7 @@ export abstract class UintElement extends SchemaElement {
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		const n = await this.getBigintValue();
-		return [`${curIndent}<${this.constructor.name}>${n}</${this.constructor.name}>\n`];
+		return [`${curIndent}<${this.name}>${n}</${this.name}>\n`];
 	}
 }
 
@@ -283,7 +283,7 @@ export abstract class FloatElement extends SchemaElement {
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		const n = await this.getValue();
-		return [`${curIndent}<${this.constructor.name}>${n}</${this.constructor.name}>\n`];
+		return [`${curIndent}<${this.name}>${n}</${this.name}>\n`];
 	}
 }
 
@@ -298,7 +298,7 @@ export class VoidElement extends SchemaElement {
 
 export class Crc32Element extends SchemaElement {
 	public static readonly id = 0xbf;
-	public static readonly name = "CRC-32";
+	public static readonly displayName = "CRC-32";
 	public static readonly leaf = true;
 
 	private async getValue(): Promise<number> {
@@ -352,7 +352,7 @@ export abstract class VintElement extends SchemaElement {
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		const vint = await this.getValue();
-		return [`${curIndent}<${this.constructor.name}>${vint.number}</${this.constructor.name}>\n`];
+		return [`${curIndent}<${this.name}>${vint.number}</${this.name}>\n`];
 	}
 }
 
@@ -475,7 +475,7 @@ export abstract class SchemaStream {
 	public async one<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T>> {
 		const result = await this.maybeOne(cls, options);
 		if (result === undefined) {
-			throw new Error(`Expected ${cls.name}`);
+			throw new Error(`Expected ${cls.displayName}`);
 		}
 		return result;
 	}

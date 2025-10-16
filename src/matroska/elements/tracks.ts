@@ -4,7 +4,7 @@ import * as ebml from "../../ebml/index.js";
 export class Tracks extends ebml.SchemaElement {
 	public static readonly id = 0x1654ae6b;
 	public static readonly level = 1;
-	public static readonly name = "Tracks";
+	public static readonly displayName = "Tracks";
 	public static get knownChildren() {
 		return [TrackEntry];
 	}
@@ -21,7 +21,7 @@ export class Tracks extends ebml.SchemaElement {
 export class TrackEntry extends ebml.SchemaElement {
 	public static readonly id = 0xae;
 	public static readonly level = 2;
-	public static readonly name = "TrackEntry";
+	public static readonly displayName = "TrackEntry";
 	public static get knownChildren() {
 		return [
 			TrackNumber,
@@ -104,7 +104,7 @@ export class TrackEntry extends ebml.SchemaElement {
 export class TrackNumber extends ebml.UintElement {
 	public static readonly id = 0xd7;
 	public static readonly level = 3;
-	public static readonly name = "TrackNumber";
+	public static readonly displayName = "TrackNumber";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -114,7 +114,7 @@ export class TrackNumber extends ebml.UintElement {
 export class TrackUID extends ebml.BytesElement {
 	public static readonly id = 0x73c5;
 	public static readonly level = 3;
-	public static readonly name = "TrackUID";
+	public static readonly displayName = "TrackUID";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -125,7 +125,7 @@ type TrackTypeValue = "video" | "audio" | "complex" | "logo" | "subtitle" | "but
 export class TrackType extends ebml.SchemaElement {
 	public static readonly id = 0x83;
 	public static readonly level = 3;
-	public static readonly name = "TrackType";
+	public static readonly displayName = "TrackType";
 	public static readonly leaf = true;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
@@ -167,7 +167,7 @@ export class TrackType extends ebml.SchemaElement {
 export class Name extends ebml.UTF8Element {
 	public static readonly id = 0x536e;
 	public static readonly level = 3;
-	public static readonly name = "Name";
+	public static readonly displayName = "Name";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -177,7 +177,7 @@ export class Name extends ebml.UTF8Element {
 export class DefaultDuration extends ebml.UintElement {
 	public static readonly id = 0x23e383;
 	public static readonly level = 3;
-	public static readonly name = "DefaultDuration";
+	public static readonly displayName = "DefaultDuration";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -187,7 +187,7 @@ export class DefaultDuration extends ebml.UintElement {
 export class FlagLacing extends ebml.UintElement {
 	public static readonly id = 0x9c;
 	public static readonly level = 3;
-	public static readonly name = "FlagLacing";
+	public static readonly displayName = "FlagLacing";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -197,7 +197,7 @@ export class FlagLacing extends ebml.UintElement {
 export class Language extends ebml.UTF8Element {
 	public static readonly id = 0x22b59c;
 	public static readonly level = 3;
-	public static readonly name = "Language";
+	public static readonly displayName = "Language";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -207,7 +207,7 @@ export class Language extends ebml.UTF8Element {
 export class ContentEncodings extends ebml.SchemaElement {
 	public static readonly id = 0x6d80;
 	public static readonly level = 3;
-	public static readonly name = "ContentEncodings";
+	public static readonly displayName = "ContentEncodings";
 	public static get knownChildren() {
 		return [ContentEncoding];
 	}
@@ -242,7 +242,7 @@ export class ContentEncodings extends ebml.SchemaElement {
 export class ContentEncoding extends ebml.SchemaElement {
 	public static readonly id = 0x6240;
 	public static readonly level = 4;
-	public static readonly name = "ContentEncoding";
+	public static readonly displayName = "ContentEncoding";
 	public static get knownChildren() {
 		return [
 			ContentEncodingOrder,
@@ -294,7 +294,7 @@ export class ContentEncoding extends ebml.SchemaElement {
 export class ContentEncodingOrder extends ebml.UintElement {
 	public static readonly id = 0x5031;
 	public static readonly level = 5;
-	public static readonly name = "ContentEncodingOrder";
+	public static readonly displayName = "ContentEncodingOrder";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
 		super(element);
@@ -306,7 +306,7 @@ const ContentEncodingScopeValues = ["block", "private", "next"] as const;
 export class ContentEncodingScope extends ebml.EnumElement<typeof ContentEncodingScopeValues[number]> {
 	public static readonly id = 0x5032;
 	public static readonly level = 5;
-	public static readonly name = "ContentEncodingScope";
+	public static readonly displayName = "ContentEncodingScope";
 	public static readonly values = ContentEncodingScopeValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
@@ -318,7 +318,7 @@ const ContentEncodingTypeValues = ["compression", "encryption"] as const;
 export class ContentEncodingType extends ebml.EnumElement<typeof ContentEncodingTypeValues[number]> {
 	public static readonly id = 0x5033;
 	public static readonly level = 5;
-	public static readonly name = "ContentEncodingType";
+	public static readonly displayName = "ContentEncodingType";
 	public static readonly values = ContentEncodingTypeValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
@@ -329,7 +329,7 @@ export class ContentEncodingType extends ebml.EnumElement<typeof ContentEncoding
 export class ContentCompression extends ebml.SchemaElement {
 	public static readonly id = 0x5034;
 	public static readonly level = 5;
-	public static readonly name = "ContentCompression";
+	public static readonly displayName = "ContentCompression";
 	public static get knownChildren() {
 		return [ContentCompAlgo, ContentCompSettings];
 	}
@@ -365,7 +365,7 @@ const ContentCompAlgoValues = ["zlib", "bzlib", "lzo1x", "headerStripping"] as c
 export class ContentCompAlgo extends ebml.EnumElement<typeof ContentCompAlgoValues[number]> {
 	public static readonly id = 0x4254;
 	public static readonly level = 6;
-	public static readonly name = "ContentCompAlgo";
+	public static readonly displayName = "ContentCompAlgo";
 	public static readonly values = ContentCompAlgoValues;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
@@ -376,7 +376,7 @@ export class ContentCompAlgo extends ebml.EnumElement<typeof ContentCompAlgoValu
 export class ContentCompSettings extends ebml.BytesElement {
 	public static readonly id = 0x4255;
 	public static readonly level = 6;
-	public static readonly name = "ContentCompSettings";
+	public static readonly displayName = "ContentCompSettings";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
 		super(element);
@@ -386,7 +386,7 @@ export class ContentCompSettings extends ebml.BytesElement {
 export class ContentEncryption extends ebml.SchemaElement {
 	public static readonly id = 0x5035;
 	public static readonly level = 5;
-	public static readonly name = "ContentEncryption";
+	public static readonly displayName = "ContentEncryption";
 	public static get knownChildren() {
 		return [];
 	}
@@ -399,7 +399,7 @@ export class ContentEncryption extends ebml.SchemaElement {
 export class CodecID extends ebml.UTF8Element {
 	public static readonly id = 0x86;
 	public static readonly level = 3;
-	public static readonly name = "CodecID";
+	public static readonly displayName = "CodecID";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -409,7 +409,7 @@ export class CodecID extends ebml.UTF8Element {
 export class CodecPrivate extends ebml.BytesElement {
 	public static readonly id = 0x63a2;
 	public static readonly level = 3;
-	public static readonly name = "CodecPrivate";
+	public static readonly displayName = "CodecPrivate";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -419,7 +419,7 @@ export class CodecPrivate extends ebml.BytesElement {
 export class CodecName extends ebml.UTF8Element {
 	public static readonly id = 0x258688;
 	public static readonly level = 3;
-	public static readonly name = "CodecName";
+	public static readonly displayName = "CodecName";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
@@ -429,7 +429,7 @@ export class CodecName extends ebml.UTF8Element {
 export class Video extends ebml.SchemaElement {
 	public static readonly id = 0xe0;
 	public static readonly level = 4;
-	public static readonly name = "Video";
+	public static readonly displayName = "Video";
 	public static get knownChildren() {
 		return [PixelWidth, PixelHeight, DisplayWidth, DisplayHeight];
 	}
@@ -458,7 +458,7 @@ export class Video extends ebml.SchemaElement {
 export class PixelWidth extends ebml.UintElement {
 	public static readonly id = 0xb0;
 	public static readonly level = 5;
-	public static readonly name = "PixelWidth";
+	public static readonly displayName = "PixelWidth";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
 		super(element);
@@ -468,7 +468,7 @@ export class PixelWidth extends ebml.UintElement {
 export class PixelHeight extends ebml.UintElement {
 	public static readonly id = 0xba;
 	public static readonly level = 5;
-	public static readonly name = "PixelHeight";
+	public static readonly displayName = "PixelHeight";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
 		super(element);
@@ -478,7 +478,7 @@ export class PixelHeight extends ebml.UintElement {
 export class DisplayWidth extends ebml.UintElement {
 	public static readonly id = 0x54b0;
 	public static readonly level = 5;
-	public static readonly name = "DisplayWidth";
+	public static readonly displayName = "DisplayWidth";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
 		super(element);
@@ -488,7 +488,7 @@ export class DisplayWidth extends ebml.UintElement {
 export class DisplayHeight extends ebml.UintElement {
 	public static readonly id = 0x54ba;
 	public static readonly level = 5;
-	public static readonly name = "DisplayHeight";
+	public static readonly displayName = "DisplayHeight";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
 		super(element);
@@ -498,7 +498,7 @@ export class DisplayHeight extends ebml.UintElement {
 class Audio extends ebml.SchemaElement {
 	public static readonly id = 0xe1;
 	public static readonly level = 4;
-	public static readonly name = "Audio";
+	public static readonly displayName = "Audio";
 	public static get knownChildren() {
 		return [SamplingFrequency, Channels, BitDepth];
 	}
@@ -523,7 +523,7 @@ class Audio extends ebml.SchemaElement {
 export class SamplingFrequency extends ebml.FloatElement {
 	public static readonly id = 0xb5;
 	public static readonly level = 5;
-	public static readonly name = "SamplingFrequency";
+	public static readonly displayName = "SamplingFrequency";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
 		super(element);
@@ -533,7 +533,7 @@ export class SamplingFrequency extends ebml.FloatElement {
 export class Channels extends ebml.UintElement {
 	public static readonly id = 0x9f;
 	public static readonly level = 5;
-	public static readonly name = "Channels";
+	public static readonly displayName = "Channels";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
 		super(element);
@@ -543,7 +543,7 @@ export class Channels extends ebml.UintElement {
 export class BitDepth extends ebml.UintElement {
 	public static readonly id = 0x6264;
 	public static readonly level = 5;
-	public static readonly name = "BitDepth";
+	public static readonly displayName = "BitDepth";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
 		super(element);

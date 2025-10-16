@@ -42,7 +42,7 @@ See https://www.matroska.org/technical/elements.html for details.
 export class EBMLHead extends ebml.SchemaElement {
 	public static readonly id = 0x1a45dfa3;
 	public static readonly level = 0;
-	public static readonly name = "EBMLHead";
+	public static readonly displayName = "EBMLHead";
 	public static readonly leaf = true;
 
 	constructor(public readonly element: ebml.Element) {
@@ -53,7 +53,7 @@ export class EBMLHead extends ebml.SchemaElement {
 export class Segment extends ebml.SchemaElement {
 	public static readonly id = 0x18538067;
 	public static readonly level = 0;
-	public static readonly name = "Segment";
+	public static readonly displayName = "Segment";
 	public static readonly knownChildren = [SeekHead, Info, Tracks, Cluster, Cues, Tags];
 
 	constructor(public readonly element: ebml.Element) {

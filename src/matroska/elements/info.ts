@@ -4,7 +4,7 @@ import * as ebml from "../../ebml/index.js";
 export class Info extends ebml.SchemaElement {
 	public static readonly id = 0x1549a966;
 	public static readonly level = 1;
-	public static readonly name = "Info";
+	public static readonly displayName = "Info";
 	public static get knownChildren() {
 		return [TimestampScale, MuxingApp, WritingApp, SegmentUUID, Duration];
 	}
@@ -25,7 +25,7 @@ export class Info extends ebml.SchemaElement {
 export class TimestampScale extends ebml.UintElement {
 	public static readonly id = 0x2ad7b1;
 	public static readonly level = 2;
-	public static readonly name = "TimestampScale";
+	public static readonly displayName = "TimestampScale";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
 		super(element);
@@ -35,7 +35,7 @@ export class TimestampScale extends ebml.UintElement {
 export class MuxingApp extends ebml.UTF8Element {
 	public static readonly id = 0x4d80;
 	public static readonly level = 2;
-	public static readonly name = "MuxingApp";
+	public static readonly displayName = "MuxingApp";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
 		super(element);
@@ -45,7 +45,7 @@ export class MuxingApp extends ebml.UTF8Element {
 export class WritingApp extends ebml.UTF8Element {
 	public static readonly id = 0x5741;
 	public static readonly level = 2;
-	public static readonly name = "WritingApp";
+	public static readonly displayName = "WritingApp";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
 		super(element);
@@ -55,7 +55,7 @@ export class WritingApp extends ebml.UTF8Element {
 export class SegmentUUID extends ebml.BytesElement {
 	public static readonly id = 0x73a4;
 	public static readonly level = 2;
-	public static readonly name = "SegmentUUID";
+	public static readonly displayName = "SegmentUUID";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
 		super(element);
@@ -65,7 +65,7 @@ export class SegmentUUID extends ebml.BytesElement {
 export class Duration extends ebml.FloatElement {
 	public static readonly id = 0x4489;
 	public static readonly level = 2;
-	public static readonly name = "Duration";
+	public static readonly displayName = "Duration";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
 		super(element);

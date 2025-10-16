@@ -5,7 +5,7 @@ import { Vint } from "../../vint/index.js";
 export class Cluster extends ebml.SchemaElement {
 	public static readonly id = 0x1f43b675;
 	public static readonly level = 1;
-	public static readonly name = "Cluster";
+	public static readonly displayName = "Cluster";
 	public static get knownChildren() {
 		return [Timestamp, SimpleBlock];
 	}
@@ -26,7 +26,7 @@ export class Cluster extends ebml.SchemaElement {
 export class Timestamp extends ebml.UintElement {
 	public static readonly id = 0xe7;
 	public static readonly level = 2;
-	public static readonly name = "Timestamp";
+	public static readonly displayName = "Timestamp";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
 		super(element);
@@ -43,7 +43,7 @@ type Lacing = typeof lacing[number];
 export class SimpleBlock extends ebml.SchemaElement {
 	public static readonly id = 0xa3;
 	public static readonly level = 2;
-	public static readonly name = "SimpleBlock";
+	public static readonly displayName = "SimpleBlock";
 	public static readonly leaf = true;
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
@@ -269,6 +269,6 @@ export class SimpleBlock extends ebml.SchemaElement {
 	}
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
-		return [`${curIndent}<${this.constructor.name} track="${await this.trackNumber}" timestamp="${await this.timestamp}" framesizes="${JSON.stringify(await this.getFrameSizes())}" />\n`];
+		return [`${curIndent}<${this.name} track="${await this.trackNumber}" timestamp="${await this.timestamp}" framesizes="${JSON.stringify(await this.getFrameSizes())}" />\n`];
 	}
 }
