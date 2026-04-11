@@ -327,7 +327,7 @@ function avc1Like(type: string) {
 }
 
 export const avc1 = avc1Like("avc1");
-export const hev1 = avc1Like("hev1");
+export const hvc1 = avc1Like("hvc1");
 
 export function avcc(data: ArrayBuilderPart): ArrayBuilder {
 	return box("avcC", data);
@@ -378,7 +378,7 @@ export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children
 		u16(sampleSize), // sample size
 		u16(0), // compression id
 		u16(0), // packet size
-		u32(sampleRate), // sample rate
+		u16(sampleRate), u16(0), // sample rate (16.16 fixed-point)
 		...children,
 	);
 }

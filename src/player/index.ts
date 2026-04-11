@@ -357,7 +357,7 @@ export class MKVToMP4Muxer {
 									),
 									m.stbl(
 										m.stsd(
-											codecID === "V_MPEGH/ISO/HEVC" ? m.hev1(
+											codecID === "V_MPEGH/ISO/HEVC" ? m.hvc1(
 												{ width, height },
 												m.hvcc(new Uint8Array(codecPrivateData)),
 											) : m.avc1(
