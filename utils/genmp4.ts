@@ -14,11 +14,14 @@ const writer = outputFile.writer();
 const muxer = new MKVToMP4Muxer(file);
 const initSegment = await muxer.getInitSegment();
 writer.write(initSegment);
+console.log("Writing init segment", initSegment.byteLength);
 await writer.flush();
+console.log("Flushed init segment");
 
 for await (const chunk of muxer.streamFrom(0)) {
+	console.log("Writing chunk", chunk.byteLength);
 	writer.write(chunk);
-	await writer.flush();
+	// await writer.flush();
 }
 
 await writer.end();

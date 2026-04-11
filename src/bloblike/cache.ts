@@ -8,7 +8,7 @@ export class CacheBlobLike implements BlobLike {
 		public readonly start: number = 0,
 		public readonly end: number = raw.size,
 		private readonly cacheBlockSize: number = 1024 * 1024,
-		maxCacheSize: number = 16 * 1024 * 1024,
+		maxCacheSize: number = 128 * 1024 * 1024,
 	) {
 		if (raw instanceof CacheBlobLike) {
 			this.cacheBlockSize = raw.cacheBlockSize;
@@ -25,12 +25,14 @@ export class CacheBlobLike implements BlobLike {
 		}
 		this.cache = new LRUCache({
 			maxSize: maxCacheSize,
-			sizeCalculation: (buffer) => buffer.byteLength,
+			sizeCalculation: (buffer) => {
+				return buffer.byteLength;
+			},
 			fetchMethod: async (index) => {
-				// console.log("Reading block", index);
-				const start = index * cacheBlockSize;
-				const end = Math.min(start + cacheBlockSize, raw.size);
-				const buffer = await raw.slice(start, end).arrayBuffer();
+				const start = index * this.cacheBlockSize;
+				const end = Math.min(start + this.cacheBlockSize, raw.size);
+				let buffer = await raw.slice(start, end).arrayBuffer();
+				buffer = buffer.slice(0, cacheBlockSize);
 				return buffer;
 			}
 		});
@@ -67,7 +69,11 @@ export class CacheBlobLike implements BlobLike {
 		while (outOffset < this.size) {
 			const blockIndex = Math.floor(inOffset / this.cacheBlockSize);
 			const blockOffset = inOffset % this.cacheBlockSize;
-			const block = (await this.cache.fetch(blockIndex))!;
+			let block = this.cache.get(blockIndex);
+			if (block === undefined) {
+				block = await this.cache.fetch(blockIndex);
+				block = block!;
+			}
 			const blockLength = Math.min(this.size - outOffset, block.byteLength - blockOffset);
 			buffer.set(
 				new Uint8Array(block, blockOffset, blockLength),

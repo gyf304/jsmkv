@@ -132,6 +132,7 @@ export class MKVToMP4Muxer {
 
 		let sequenceNumber = seekIndex;
 		for await (const [cluster, nextCluster] of withNextAsync(clusters)) {
+			console.log("Cluster", sequenceNumber);
 			sequenceNumber++;
 
 			const clusterTimestamp = await cluster.timestamp;
