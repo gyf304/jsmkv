@@ -125,7 +125,8 @@ export class MKVToMP4Muxer {
 		const duration = this.mkvDuration!;
 
 		const seeks = this.seeks!;
-		let seekIndex = seeks.findIndex((seek) => seek.time >= timeInSeconds) ?? seeks.length;
+		let seekIndex = seeks.findIndex((seek) => seek.time >= timeInSeconds);
+		if (seekIndex === -1) seekIndex = seeks.length; // seeking past last cue point
 		seekIndex = Math.max(0, seekIndex - 1);
 		const seek = seeks[seekIndex];
 		const clusters = segment.seekClusters(seek.clusterPosition);
@@ -140,18 +141,16 @@ export class MKVToMP4Muxer {
 			const clusterDuration = Math.max(0, nextClusterTimestamp - clusterTimestamp);
 
 			const blocksByTrack = await this.readCluster(cluster);
-			const blocksFirstTimestamps = new Map<number, number>();
-			for (const [trackNumber, blocks] of blocksByTrack) {
-				const firstTimestamp = await blocks[0].timestamp;
-				blocksFirstTimestamps.set(trackNumber, firstTimestamp);
-			}
 
 			const nextBlocksByTrack = nextCluster === undefined ? undefined : await this.readCluster(nextCluster);
-			const nextBlocksFirstTimestamps = new Map<number, number>();
+			const nextBlocksMinTimestamps = new Map<number, number>();
 			if (nextBlocksByTrack !== undefined) {
 				for (const [trackNumber, blocks] of nextBlocksByTrack) {
-					const firstTimestamp = await blocks[0].timestamp;
-					nextBlocksFirstTimestamps.set(trackNumber, firstTimestamp);
+					let minTimestamp = Infinity;
+					for (const block of blocks) {
+						minTimestamp = Math.min(minTimestamp, await block.timestamp);
+					}
+					nextBlocksMinTimestamps.set(trackNumber, minTimestamp);
 				}
 			}
 
@@ -167,6 +166,7 @@ export class MKVToMP4Muxer {
 				const mp4TrackId = track.mp4TrackId;
 
 				const blocks = blocksByTrack.get(trackNumber) ?? [];
+				if (blocks.length === 0) continue;
 				const samples: m.TRUN["samples"] = [];
 				const dataParts: m.ArrayBuilderPart[] = [];
 
@@ -176,13 +176,16 @@ export class MKVToMP4Muxer {
 					const pts = await block.timestamp;
 					ptses.push(pts);
 				}
-				const nextPts = clusterDuration + (nextBlocksFirstTimestamps.get(trackNumber) ?? 0);
-				ptses.push(nextPts);
-
-				// make DTS monotonic
-				let dtses = ptses.slice();
-				for (let i = dtses.length - 1; i >= 1; i--) {
-					dtses[i-1] = Math.min(dtses[i-1], dtses[i]);
+				// Compute DTS from PTS: blocks are in decode order, PTS may be
+				// non-monotonic due to B-frames. Backward clamping ensures
+				// DTS[i] <= PTS[i], forward enforcement ensures positive durations.
+				const nextDts = clusterDuration + (nextBlocksMinTimestamps.get(trackNumber) ?? 0);
+				const dtses = [...ptses, nextDts];
+				for (let i = dtses.length - 2; i >= 0; i--) {
+					dtses[i] = Math.min(dtses[i], dtses[i + 1]);
+				}
+				for (let i = 1; i < dtses.length; i++) {
+					dtses[i] = Math.max(dtses[i], dtses[i - 1] + 1);
 				}
 
 				const durations: number[] = [];
@@ -213,7 +216,8 @@ export class MKVToMP4Muxer {
 						size: data.byteLength,
 						compositionTimeOffset: pts - dts,
 						sampleFlags: {
-							dependsOn: (keyframe || i === 0) ? 2 : 1,
+							dependsOn: keyframe ? 2 : 1,
+							isNonSyncSample: keyframe ? 0 : 1,
 						},
 					});
 				}
@@ -223,7 +227,7 @@ export class MKVToMP4Muxer {
 						trackId: mp4TrackId,
 					}),
 					m.tfdt({
-						baseMediaDecodeTime: clusterTimestamp + (blocksFirstTimestamps.get(trackNumber) ?? 0),
+						baseMediaDecodeTime: clusterTimestamp + dtses[0],
 					}),
 					m.trun({
 						dataOffset: offset,
@@ -492,7 +496,7 @@ export class MKVToMP4Muxer {
 			m.ftyp({
 				majorBrand: "isom",
 				minorVersion: 0,
-				compatibleBrands: ["isom", "iso2", "mp41", "mp42", ...(videoTrack.mimeCodec.startsWith("avc1") ? ["avc1"] : [])],
+				compatibleBrands: ["isom", "iso2", "iso6", "mp41", "mp42", ...(videoTrack.mimeCodec.startsWith("avc1") ? ["avc1"] : [])],
 			}),
 			m.moov(
 				m.mvhd({

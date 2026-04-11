@@ -288,7 +288,7 @@ export function dref(...entries: ArrayBuilderPart[]): ArrayBuilder {
 	);
 }
 export function url(): ArrayBuilder {
-	return box("url ", zeros(4));
+	return box("url ", verflag(0, 1)); // 0x000001 = self-contained
 }
 
 export const stbl = curryBox("stbl");
