@@ -3,7 +3,7 @@ import { BlobLike, FetchBlobLike } from "../bloblike/index.js";
 import { File } from "../matroska/index.js";
 import * as mkve from "../matroska/elements/index.js";
 
-import * as m from "./box";
+import * as m from "./box.js";
 
 const supportedVideoCodecs = [
 	"V_MPEG4/ISO/AVC",

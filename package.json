@@ -1,9 +1,22 @@
 {
   "name": "jsmkv",
+  "version": "0.1.0",
+  "description": "In-browser Matroska (MKV) player and TypeScript tools for working with Matroska files",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gyf304/jsmkv.git"
+  },
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "dependencies": {
     "lru-cache": "^10.2.2"
   },
@@ -17,10 +30,10 @@
   "scripts": {
     "cli": "bun src/cli.ts",
     "build:demo": "bun demo/build.ts",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && cp utils/cjs-package.json dist/cjs/package.json",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:polyfill": "bun build --minify src/player/polyfill.ts > dist/polyfill.js",
-    "build": "rm -rf dist && bun run build:cjs && bun run build:esm && bun run build:polyfill && rm dist/*.tsbuildinfo",
+    "build": "rm -rf dist && bun run build:cjs && bun run build:esm && bun run build:polyfill && rm -f dist/*.tsbuildinfo",
     "npm:publish": "bun run build && npm publish --dry-run"
   },
   "type": "module"

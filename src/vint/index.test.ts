@@ -20,7 +20,7 @@ describe("Vint Tests", () => {
 	});
 });
 
-const maxBigInt = 1n << 63n;
+const maxBigInt = 1n << 56n;
 const maxNumber = 0x100000;
 
 describe("Vint Range Tests", () => {
@@ -38,5 +38,21 @@ describe("Vint Range Tests", () => {
 			const i2 = v.toNumber();
 			expect(i2).toBe(i);
 		}
+	});
+
+	test("Testing zero encoding", () => {
+		const zero = Vint.fromBigInt(0n);
+		expect(Array.from(zero.bytes)).toEqual([0x80]);
+		expect(zero.valid).toBe(true);
+		expect(zero.toBigInt()).toBe(0n);
+		expect(Vint.fromNumber(0).toNumber()).toBe(0);
+	});
+
+	test("Testing out of range values", () => {
+		expect(() => Vint.fromBigInt(maxBigInt)).toThrow(RangeError);
+		expect(() => Vint.fromNumber(Number(maxBigInt))).toThrow(RangeError);
+		expect(() => Vint.fromBigInt(-1n)).toThrow(RangeError);
+		expect(() => Vint.fromNumber(-1)).toThrow(RangeError);
+		expect(() => Vint.fromNumber(1.5)).toThrow(RangeError);
 	});
 });

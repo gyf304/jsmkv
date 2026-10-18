@@ -1,4 +1,4 @@
-import { BlobLike } from "../bloblike";
+import { BlobLike } from "../bloblike/index.js";
 
 export class Vint {
 	public readonly bytes: Uint8Array;
@@ -104,10 +104,16 @@ export class Vint {
 	}
 
 	public static fromBigInt(i: bigint): Vint {
-		if (i === 0n) {
-			return new Vint(new Uint8Array(1));
+		if (i < 0n) {
+			throw new RangeError("Vint cannot be negative");
 		}
-		let byteLen = Math.ceil(Vint.bitLength(i) / 7);
+		if (i === 0n) {
+			return new Vint(new Uint8Array([0x80]));
+		}
+		const byteLen = Math.ceil(Vint.bitLength(i) / 7);
+		if (byteLen > 8) {
+			throw new RangeError("Vint is out of range");
+		}
 		let bytes = new Uint8Array(byteLen);
 		for (let cur = byteLen - 1; i > 0; cur--) {
 			bytes[cur] = Number(i & 0xffn);
@@ -118,10 +124,16 @@ export class Vint {
 	}
 
 	public static fromNumber(i: number): Vint {
-		if (i === 0) {
-			return new Vint(new Uint8Array(1));
+		if (!Number.isInteger(i) || i < 0) {
+			throw new RangeError("Vint must be a non-negative integer");
 		}
-		let byteLen = Math.ceil(Vint.bitLength(BigInt(i)) / 7);
+		if (i === 0) {
+			return new Vint(new Uint8Array([0x80]));
+		}
+		const byteLen = Math.ceil(Vint.bitLength(BigInt(i)) / 7);
+		if (byteLen > 8) {
+			throw new RangeError("Vint is out of range");
+		}
 		let bytes = new Uint8Array(byteLen);
 		for (let cur = byteLen - 1; i > 0; cur--) {
 			bytes[cur] = i & 0xff;
