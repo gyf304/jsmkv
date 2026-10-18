@@ -16,7 +16,6 @@ const player = new shaka.Player();
 player.configure({
 	streaming: {
 		bufferingGoal: 30,
-		rebufferingGoal: 15,
 	},
 });
 
