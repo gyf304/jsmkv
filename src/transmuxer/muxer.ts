@@ -22,6 +22,8 @@ interface Track {
 	mimeCodec: string;
 	mkvTrackNumber: number;
 	mp4TrackId: number;
+	timescale: number;
+	duration: number;
 	trak: m.ArrayBuilder;
 	contentEncodings?: mkve.ContentEncodings;
 }
@@ -45,6 +47,7 @@ export class MatroskaToFmp4Muxer {
 
 	private duration: number | undefined;
 	private mkvDuration: number | undefined;
+	private timestampScale: number | undefined;
 	private mkvSegment: mkve.Segment | undefined;
 	private mimeType: string | undefined;
 	private seeks: SeekCluster[] | undefined;
@@ -131,7 +134,16 @@ export class MatroskaToFmp4Muxer {
 				const track = this.mkvTracks.get(trackNumber)!;
 				const mp4TrackId = track.mp4TrackId;
 
-				const blocks = blocksByTrack.get(trackNumber) ?? [];
+				let blocks = blocksByTrack.get(trackNumber) ?? [];
+				if (track.type === "audio") {
+					const filtered: mkve.SimpleBlock[] = [];
+					for (const block of blocks) {
+						if (await block.timestamp >= 0) {
+							filtered.push(block);
+						}
+					}
+					blocks = filtered;
+				}
 				if (blocks.length === 0) continue;
 				const samples: m.TRUN["samples"] = [];
 				const dataParts: m.ArrayBuilderPart[] = [];
@@ -175,8 +187,13 @@ export class MatroskaToFmp4Muxer {
 						frames.push(frame);
 					}
 					if (frames.length === 0) continue;
-					const frameDuration = Math.floor(duration / frames.length);
-					const lastFrameDuration = duration - frameDuration * (frames.length - 1);
+					const videoFrameDuration = this.toTrackTime(duration, track);
+					const frameDuration = track.type === "audio" ?
+						1024 :
+						Math.floor(videoFrameDuration / frames.length);
+					const lastFrameDuration = track.type === "audio" ?
+						1024 :
+						videoFrameDuration - frameDuration * (frames.length - 1);
 					for (let j = 0; j < frames.length; j++) {
 						let data = frames[j];
 						if (track.contentEncodings !== undefined) {
@@ -187,7 +204,9 @@ export class MatroskaToFmp4Muxer {
 						samples.push({
 							duration: j === frames.length - 1 ? lastFrameDuration : frameDuration,
 							size: data.byteLength,
-							compositionTimeOffset: pts - dts,
+							compositionTimeOffset: track.type === "audio" ?
+								0 :
+								this.toTrackTime(pts - dts, track),
 							sampleFlags: {
 								dependsOn: keyframe ? 2 : 1,
 								isNonSyncSample: keyframe ? 0 : 1,
@@ -201,7 +220,7 @@ export class MatroskaToFmp4Muxer {
 						trackId: mp4TrackId,
 					}),
 					m.tfdt({
-						baseMediaDecodeTime: clusterTimestamp + dtses[0],
+						baseMediaDecodeTime: Math.max(0, this.toTrackTime(clusterTimestamp + dtses[0], track)),
 					}),
 					m.trun({
 						dataOffset: offset,
@@ -237,6 +256,10 @@ export class MatroskaToFmp4Muxer {
 		}
 	}
 
+	private toTrackTime(ticks: number, track: Track): number {
+		return Math.round(ticks * this.timestampScale! * track.timescale / 1e9);
+	}
+
 	private init() {
 		if (this.initPromise === undefined) {
 			this.initPromise = this.initImpl();
@@ -262,6 +285,7 @@ export class MatroskaToFmp4Muxer {
 		}
 		const timestampScale = await info.timestampScale; // in ns
 		const duration = await info.duration; // in timestampScale
+		this.timestampScale = timestampScale;
 		// console.log({ timestampScale, duration });
 		const durationSeconds = duration * (timestampScale / 1e9);
 		// console.log("Duration:", durationSeconds);
@@ -298,10 +322,13 @@ export class MatroskaToFmp4Muxer {
 						throw new Error("CodecPrivate not found");
 					}
 					const codecPrivateData = await codecPrivate.element.data.arrayBuffer();
+					const timescale = Math.round(1e9 / timestampScale);
 					convertedTracks.push({
 						type: "video",
 						mkvTrackNumber: trackNumber,
 						mp4TrackId: convertedTracks.length + 1,
+						timescale,
+						duration,
 						mimeCodec:
 							codecID === "V_MPEGH/ISO/HEVC" ?
 							hevcMimeCodec(codecPrivateData) :
@@ -314,8 +341,7 @@ export class MatroskaToFmp4Muxer {
 							}),
 							m.mdia(
 								m.mdhd({
-									// 1e9 / timeScale = timestampScale
-									timeScale: 1e9 / timestampScale,
+									timeScale: timescale,
 									duration,
 								}),
 								m.hdlr({
@@ -373,11 +399,15 @@ export class MatroskaToFmp4Muxer {
 						throw new Error("CodecPrivate not found");
 					}
 					const codecPrivateData = await codecPrivate.element.data.arrayBuffer();
+					const timescale = Math.round(sampleRate);
+					const trackDuration = Math.round(durationSeconds * timescale);
 
 					convertedTracks.push({
 						type: "audio",
 						mkvTrackNumber: trackNumber,
 						mp4TrackId: convertedTracks.length + 1,
+						timescale,
+						duration: trackDuration,
 						mimeCodec: "mp4a.40.2",
 						trak: m.trak(
 							m.tkhd({
@@ -385,8 +415,8 @@ export class MatroskaToFmp4Muxer {
 							}),
 							m.mdia(
 								m.mdhd({
-									timeScale: 1e9 / timestampScale,
-									duration,
+									timeScale: timescale,
+									duration: trackDuration,
 								}),
 								m.hdlr({
 									handlerType: "soun",

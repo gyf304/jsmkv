@@ -14,6 +14,8 @@ export interface MatroskaMuxOptions {
 interface SegmentTrack {
 	info: MatroskaTrackInfo;
 	mp4TrackId: number;
+	timescale: number;
+	duration: number;
 	trak: m.ArrayBuilder;
 }
 
@@ -28,10 +30,16 @@ export class MatroskaSegmentMuxer {
 				continue;
 			}
 			const mp4TrackId = this.tracks.size + 1;
+			const timescale = track.type === "audio" && track.sampleRate !== undefined ?
+				Math.round(track.sampleRate) :
+				Math.round(1e9 / this.info.timestampScale);
+			const duration = Math.round(this.info.duration * timescale);
 			this.tracks.set(track.type, {
 				info: track,
 				mp4TrackId,
-				trak: this.buildTrak(track, mp4TrackId),
+				timescale,
+				duration,
+				trak: this.buildTrak(track, mp4TrackId, timescale, duration),
 			});
 		}
 	}
@@ -132,6 +140,11 @@ export class MatroskaSegmentMuxer {
 		const blocks: mkve.SimpleBlock[] = [];
 		for await (const block of cluster.simpleBlocks) {
 			if (await block.trackNumber === track.info.number) {
+				// Negative timestamps are codec priming (typically AAC). Dropping
+				// them aligns the first real audio sample with the presentation.
+				if (track.info.type === "audio" && await block.timestamp < 0) {
+					continue;
+				}
 				blocks.push(block);
 			}
 		}
@@ -170,8 +183,13 @@ export class MatroskaSegmentMuxer {
 			if (frames.length === 0) {
 				continue;
 			}
-			const frameDuration = Math.floor(duration / frames.length);
-			const lastFrameDuration = duration - frameDuration * (frames.length - 1);
+			const videoFrameDuration = this.toTrackTime(duration, track);
+			const frameDuration = track.info.type === "audio" ?
+				1024 :
+				Math.floor(videoFrameDuration / frames.length);
+			const lastFrameDuration = track.info.type === "audio" ?
+				1024 :
+				videoFrameDuration - frameDuration * (frames.length - 1);
 			for (let j = 0; j < frames.length; j++) {
 				let frameData = frames[j];
 				if (track.info.contentEncodings !== undefined) {
@@ -181,7 +199,9 @@ export class MatroskaSegmentMuxer {
 				samples.push({
 					duration: j === frames.length - 1 ? lastFrameDuration : frameDuration,
 					size: frameData.byteLength,
-					compositionTimeOffset: pts - dts,
+					compositionTimeOffset: track.info.type === "audio" ?
+						0 :
+						this.toTrackTime(pts - dts, track),
 					sampleFlags: {
 						dependsOn: keyframe ? 2 : 1,
 						isNonSyncSample: keyframe ? 0 : 1,
@@ -191,9 +211,10 @@ export class MatroskaSegmentMuxer {
 		}
 
 		const sequence = sequenceNumber ?? this.sequenceNumber++;
+		const baseMediaDecodeTime = Math.max(0, this.toTrackTime(clusterTimestamp + dtses[0], track));
 		const traf = (offset: number) => m.traf(
 			m.tfhd({ trackId: track.mp4TrackId }),
-			m.tfdt({ baseMediaDecodeTime: clusterTimestamp + dtses[0] }),
+			m.tfdt({ baseMediaDecodeTime }),
 			m.trun({ dataOffset: offset, samples }),
 		);
 		const moofSize = m.moof(m.mfhd({ sequenceNumber: sequence }), traf(0)).byteLength;
@@ -212,8 +233,11 @@ export class MatroskaSegmentMuxer {
 		return min === Infinity ? 0 : min;
 	}
 
-	private buildTrak(info: MatroskaTrackInfo, mp4TrackId: number): m.ArrayBuilder {
-		const timeScale = Math.round(1e9 / this.info.timestampScale);
+	private toTrackTime(ticks: number, track: SegmentTrack): number {
+		return Math.round(ticks * this.info.timestampScale * track.timescale / 1e9);
+	}
+
+	private buildTrak(info: MatroskaTrackInfo, mp4TrackId: number, timescale: number, duration: number): m.ArrayBuilder {
 		if (info.type === "video") {
 			const width = info.width ?? 0;
 			const height = info.height ?? 0;
@@ -221,7 +245,7 @@ export class MatroskaSegmentMuxer {
 			return m.trak(
 				m.tkhd({ trackId: mp4TrackId, width, height }),
 				m.mdia(
-					m.mdhd({ timeScale, duration: this.info.durationTicks }),
+					m.mdhd({ timeScale: timescale, duration }),
 					m.hdlr({ handlerType: "vide", handlerName: "VideoHandler" }),
 					m.minf(
 						m.vmhd({}),
@@ -246,7 +270,7 @@ export class MatroskaSegmentMuxer {
 		return m.trak(
 			m.tkhd({ trackId: mp4TrackId }),
 			m.mdia(
-				m.mdhd({ timeScale, duration: this.info.durationTicks }),
+				m.mdhd({ timeScale: timescale, duration }),
 				m.hdlr({ handlerType: "soun", handlerName: "SoundHandler" }),
 				m.minf(
 					m.smhd({}),
