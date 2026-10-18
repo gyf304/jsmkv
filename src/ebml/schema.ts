@@ -96,12 +96,16 @@ export abstract class SchemaElement {
 		return map;
 	}
 
+	protected createStream(): Stream {
+		return this.element.stream;
+	}
+
 	public get stream(): SchemaStream {
 		const constructor = this.constructor as unknown as typeof SchemaElement;
 		if (constructor.leaf) {
 			throw new Error("Cannot get stream of a leaf element");
 		}
-		return new ChildSchemaStream(this.element.stream, this);
+		return new ChildSchemaStream(this.createStream(), this);
 	}
 
 	public get value(): Promise<unknown> | undefined {

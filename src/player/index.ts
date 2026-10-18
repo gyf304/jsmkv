@@ -133,7 +133,6 @@ export class MKVToMP4Muxer {
 
 		let sequenceNumber = seekIndex;
 		for await (const [cluster, nextCluster] of withNextAsync(clusters)) {
-			console.log("Cluster", sequenceNumber);
 			sequenceNumber++;
 
 			const clusterTimestamp = await cluster.timestamp;
@@ -200,26 +199,34 @@ export class MKVToMP4Muxer {
 					const duration = durations[i];
 
 					if (duration < 0) {
-						console.log({ pts, dts, duration });
-						throw new Error("Invalid duration");
+						throw new Error(`Invalid duration: pts=${pts}, dts=${dts}, duration=${duration}`);
 					}
 
 					const keyframe = await block.keyframe;
-					let data = await block.data;
-					if (track.contentEncodings !== undefined) {
-						data = await track.contentEncodings.decode(data);
+					const frames: Uint8Array[] = [];
+					for await (const frame of block.frames) {
+						frames.push(frame);
 					}
+					if (frames.length === 0) continue;
+					const frameDuration = Math.floor(duration / frames.length);
+					const lastFrameDuration = duration - frameDuration * (frames.length - 1);
+					for (let j = 0; j < frames.length; j++) {
+						let data = frames[j];
+						if (track.contentEncodings !== undefined) {
+							data = new Uint8Array(await track.contentEncodings.decode(data.buffer as ArrayBuffer));
+						}
 
-					dataParts.push(new Uint8Array(data));
-					samples.push({
-						duration,
-						size: data.byteLength,
-						compositionTimeOffset: pts - dts,
-						sampleFlags: {
-							dependsOn: keyframe ? 2 : 1,
-							isNonSyncSample: keyframe ? 0 : 1,
-						},
-					});
+						dataParts.push(data);
+						samples.push({
+							duration: j === frames.length - 1 ? lastFrameDuration : frameDuration,
+							size: data.byteLength,
+							compositionTimeOffset: pts - dts,
+							sampleFlags: {
+								dependsOn: keyframe ? 2 : 1,
+								isNonSyncSample: keyframe ? 0 : 1,
+							},
+						});
+					}
 				}
 
 				const traf = (offset: number) => m.traf(
@@ -277,7 +284,7 @@ export class MKVToMP4Muxer {
 		const segment = await mkv.one(mkve.Segment);
 		this.mkvSegment = segment;
 
-		const cues = await segment.getCues(true);
+		const cues = await segment.getCues();
 		if (cues === undefined) {
 			throw new Error("Cues not found");
 		}
@@ -317,10 +324,6 @@ export class MKVToMP4Muxer {
 						continue;
 					}
 					const trackNumber = await track.trackNumber;
-					const defaultDuration = await track.defaultDuration;
-					if (defaultDuration === undefined) {
-						throw new Error("DefaultDuration not found");
-					}
 					const width = await video.pixelWidth;
 					const height = await video.pixelHeight;
 					const codecPrivate = await track.maybeOne(mkve.CodecPrivate);
@@ -518,175 +521,191 @@ export class MKVToMP4Muxer {
 	}
 }
 
-class Signal<T> {
-	private resolve: ((value: T) => void) | undefined;
-	private reject: ((reason: any) => void) | undefined;
-
-	constructor() {}
-
-	public async wait(): Promise<T> {
-		return new Promise<T>((resolve, reject) => {
-			this.resolve = resolve;
-			this.reject = reject;
-		});
-	}
-
-	public signal(value: T) {
-		if (this.resolve === undefined) {
-			throw new Error("Signal not waiting");
-		}
-		this.resolve(value);
-	}
-
-	public signalError(reason: any) {
-		if (this.reject === undefined) {
-			throw new Error("Signal not waiting");
-		}
-		this.reject(reason);
-	}
-}
-
 export class MKVVideoPlayer {
 	private destroyed = false;
-	private destroySignal = new Signal<void>();
+	private readonly destroyPromise: Promise<void>;
+	private readonly resolveDestroy: () => void;
+	public readonly ready: Promise<void>;
 
 	constructor(private readonly source: BlobLike, private readonly video: HTMLVideoElement, private options?: Options) {
-		this.init();
+		let resolveDestroy!: () => void;
+		this.destroyPromise = new Promise<void>((resolve) => {
+			resolveDestroy = resolve;
+		});
+		this.resolveDestroy = resolveDestroy;
+		this.ready = this.init();
+		this.ready.catch(() => {});
 	}
 
-	public async destroy() {
-		if (this.destroyed) {
-			return;
-		}
+	public async destroy(): Promise<void> {
 		this.destroyed = true;
-		await this.destroySignal.wait();
+		this.resolveDestroy();
+		await this.ready.catch(() => {});
 	}
 
 	private async init() {
-		// initialize muxer
-		const muxer = new MKVToMP4Muxer(this.source);
-		const mimeType = await muxer.getMimeType();
-		console.log("MIME type:", mimeType);
-		const durationSeconds = await muxer.getDuration();
-		const initSegment = await muxer.getInitSegment();
-
-		// initialize video element and media source
+		let mediaSource: MediaSource | undefined;
+		let sourceBuffer: SourceBuffer | undefined;
+		let objectUrl: string | undefined;
+		let onSeeking: (() => void) | undefined;
 		const video = this.video;
-		const mediaSource = new MediaSource();
+		try {
+			// initialize muxer
+			const muxer = new MKVToMP4Muxer(this.source);
+			const mimeType = await muxer.getMimeType();
+			const durationSeconds = await muxer.getDuration();
+			const initSegment = await muxer.getInitSegment();
 
-		video.src = URL.createObjectURL(mediaSource);
+			// initialize video element and media source
+			const ms = new MediaSource();
+			mediaSource = ms;
+			objectUrl = URL.createObjectURL(ms);
+			video.src = objectUrl;
 
-		await new Promise<void>((resolve) => {
-			const sourceopen = () => {
-				mediaSource.removeEventListener("sourceopen", sourceopen);
-				resolve();
-			};
-			mediaSource.addEventListener("sourceopen", sourceopen);
-		});
-
-		mediaSource.duration = durationSeconds;
-		const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-		const waitForSourceBuffer = () => new Promise<void>((resolve) => {
-			if (sourceBuffer.updating) {
-				const updateend = () => {
-					sourceBuffer.removeEventListener("updateend", updateend);
-					resolve();
-				};
-				sourceBuffer.addEventListener("updateend", updateend);
-			} else {
-				resolve();
+			await Promise.race([
+				new Promise<void>((resolve) => {
+					const sourceopen = () => {
+						ms.removeEventListener("sourceopen", sourceopen);
+						resolve();
+					};
+					ms.addEventListener("sourceopen", sourceopen);
+				}),
+				this.destroyPromise,
+			]);
+			if (this.destroyed) {
+				return;
 			}
-		});
-		sourceBuffer.mode = "segments";
 
-		// initialize header
-		sourceBuffer.appendBuffer(initSegment);
-		await waitForSourceBuffer();
-
-		const maxBufferSeconds = this.options?.maxBufferSeconds ?? 60;
-
-		let seeked = true;
-		const onSeeking = () => {
-			seeked = true;
-		};
-		video.addEventListener("seeking", onSeeking);
-
-		while (true) {
-			seeked = false;
-
-			const videoTime = video.currentTime;
-			const stream = muxer.streamFrom(videoTime);
-
-			for await (const chunk of stream) {
-				if (seeked || this.destroyed) {
-					break;
-				}
-				const timeRanges: [number, number][] = [];
-				for (let i = 0; i < video.buffered.length; i++) {
-					const start = video.buffered.start(i);
-					const end = video.buffered.end(i);
-					if (timeRanges.length > 0) {
-						const last = timeRanges[timeRanges.length - 1];
-						const threshold = 0.5;
-						if (start - last[1] < threshold) {
-							last[1] = end;
-							continue;
-						}
+			ms.duration = durationSeconds;
+			const sb = ms.addSourceBuffer(mimeType);
+			sourceBuffer = sb;
+			const waitForSourceBuffer = () => Promise.race([
+				new Promise<void>((resolve) => {
+					if (sb.updating) {
+						const updateend = () => {
+							sb.removeEventListener("updateend", updateend);
+							resolve();
+						};
+						sb.addEventListener("updateend", updateend);
+					} else {
+						resolve();
 					}
-					timeRanges.push([start, end]);
-				}
-				const currentTime = video.currentTime;
-				const currentTimeRange = timeRanges.find(([start, end]) => start <= currentTime && currentTime <= end);
-				while (currentTimeRange !== undefined && (video.currentTime + maxBufferSeconds) < currentTimeRange[1]) {
+				}),
+				this.destroyPromise,
+			]);
+			sb.mode = "segments";
+
+			// initialize header
+			sb.appendBuffer(initSegment);
+			await waitForSourceBuffer();
+			if (this.destroyed) {
+				return;
+			}
+
+			const maxBufferSeconds = this.options?.maxBufferSeconds ?? 60;
+
+			let seeked = true;
+			onSeeking = () => {
+				seeked = true;
+			};
+			video.addEventListener("seeking", onSeeking);
+
+			while (true) {
+				seeked = false;
+
+				const videoTime = video.currentTime;
+				const stream = muxer.streamFrom(videoTime);
+
+				for await (const chunk of stream) {
 					if (seeked || this.destroyed) {
 						break;
 					}
-					await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
+					const timeRanges: [number, number][] = [];
+					for (let i = 0; i < video.buffered.length; i++) {
+						const start = video.buffered.start(i);
+						const end = video.buffered.end(i);
+						if (timeRanges.length > 0) {
+							const last = timeRanges[timeRanges.length - 1];
+							const threshold = 0.5;
+							if (start - last[1] < threshold) {
+								last[1] = end;
+								continue;
+							}
+						}
+						timeRanges.push([start, end]);
+					}
+					const currentTime = video.currentTime;
+					const currentTimeRange = timeRanges.find(([start, end]) => start <= currentTime && currentTime <= end);
+					while (currentTimeRange !== undefined && (video.currentTime + maxBufferSeconds) < currentTimeRange[1]) {
+						if (seeked || this.destroyed) {
+							break;
+						}
+						await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
+					}
+					if (seeked || this.destroyed) {
+						break;
+					}
+					sb.appendBuffer(chunk);
+					await waitForSourceBuffer();
+					if (this.destroyed) {
+						break;
+					}
+
+					if (timeRanges.length > 0) {
+						const currentTime = video.currentTime;
+						const bufferStart = timeRanges[0][0];
+						const bufferEnd = timeRanges[timeRanges.length - 1][1];
+
+						const desiredBufferStart = Math.max(bufferStart, currentTime - maxBufferSeconds * 2);
+						const desiredBufferEnd = Math.min(bufferEnd, currentTime + maxBufferSeconds * 2);
+
+						if (bufferStart < desiredBufferStart) {
+							sb.remove(0, desiredBufferStart);
+							await waitForSourceBuffer();
+						}
+
+						if (bufferEnd > desiredBufferEnd) {
+							sb.remove(desiredBufferEnd, bufferEnd);
+							await waitForSourceBuffer();
+						}
+					}
 				}
-				if (seeked || this.destroyed) {
+
+				if (this.destroyed) {
 					break;
 				}
-				sourceBuffer.appendBuffer(chunk);
-				await waitForSourceBuffer();
 
-				if (timeRanges.length > 0) {
-					const currentTime = video.currentTime;
-					const bufferStart = timeRanges[0][0];
-					const bufferEnd = timeRanges[timeRanges.length - 1][1];
-
-					const desiredBufferStart = Math.max(bufferStart, currentTime - maxBufferSeconds * 2);
-					const desiredBufferEnd = Math.min(bufferEnd, currentTime + maxBufferSeconds * 2);
-
-					if (bufferStart < desiredBufferStart) {
-						sourceBuffer.remove(0, desiredBufferStart);
-						await waitForSourceBuffer();
+				// end of stream, wait for seek
+				while (!seeked && !this.destroyed) {
+					await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
+				}
+			}
+		} finally {
+			if (onSeeking !== undefined) {
+				video.removeEventListener("seeking", onSeeking);
+			}
+			if (mediaSource !== undefined) {
+				if (mediaSource.readyState === "open") {
+					try {
+						mediaSource.endOfStream();
+					} catch {
+						// ignore: the media source may already be closed
 					}
-
-					if (bufferEnd > desiredBufferEnd) {
-						sourceBuffer.remove(desiredBufferEnd, bufferEnd);
-						await waitForSourceBuffer();
+				}
+				if (sourceBuffer !== undefined) {
+					try {
+						mediaSource.removeSourceBuffer(sourceBuffer);
+					} catch {
+						// ignore: the source buffer may already be detached
 					}
 				}
 			}
-
-			if (this.destroyed) {
-				break;
-			}
-
-			// end of stream, wait for seek
-			while (!seeked) {
-				await new Promise<void>((resolve) => { window.setTimeout(resolve, 100); });
+			if (objectUrl !== undefined) {
+				video.removeAttribute("src");
+				video.load();
+				URL.revokeObjectURL(objectUrl);
 			}
 		}
-
-		// cleanup
-		video.removeEventListener("seeking", onSeeking);
-		mediaSource.endOfStream();
-		mediaSource.removeSourceBuffer(sourceBuffer);
-		video.src = "";
-		URL.revokeObjectURL(video.src);
-
-		this.destroySignal.signal();
 	}
 }
 
@@ -719,6 +738,7 @@ export function polyfill() {
 		for (const [video, mkvSource] of newVideos) {
 			const blobLike = await FetchBlobLike.fromUrl(mkvSource);
 			const player = new MKVVideoPlayer(blobLike, video);
+			player.ready.catch((error) => console.error("MKV playback failed", error));
 			players.set(video, player);
 		}
 	};

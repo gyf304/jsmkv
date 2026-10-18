@@ -111,7 +111,7 @@ export class TrackNumber extends ebml.UintElement {
 	}
 }
 
-export class TrackUID extends ebml.BytesElement {
+export class TrackUID extends ebml.UintElement {
 	public static readonly id = 0x73c5;
 	public static readonly level = 3;
 	public static readonly displayName = "TrackUID";

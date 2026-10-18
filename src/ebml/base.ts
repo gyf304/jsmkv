@@ -1,6 +1,12 @@
 import { BlobLike } from "../bloblike/index.js";
 import { Vint } from "../vint/index.js";
 
+export interface ElementHeader {
+	id: Vint;
+	dataSize: Vint;
+	headerSize: number;
+}
+
 export class Element {
 	constructor(public readonly id: Vint, public readonly dataSize: Vint, public readonly data: BlobLike) {
 	}
@@ -17,46 +23,39 @@ export class Element {
 		return this.stream.children;
 	}
 
-	public static async fromBlob(blob: BlobLike): Promise<Element> {
+	public static async readHeader(blob: BlobLike): Promise<ElementHeader> {
 		// read first 16 bytes
 		const sliced = blob.slice(0, Math.min(blob.size, 16));
-		const buffer = await sliced.arrayBuffer();
-		const idVint = Vint.fromBytes(new Uint8Array(buffer));
-		const sizeVint = Vint.fromBytes(new Uint8Array(buffer.slice(idVint.size)));
-		const size = sizeVint.bigint;
-		const dataStart = idVint.size + sizeVint.size;
-		const dataEnd = dataStart + Number(size);
+		const bytes = new Uint8Array(await sliced.arrayBuffer());
+		const id = Vint.fromBytes(bytes);
+		const dataSize = Vint.fromBytes(bytes.subarray(id.size));
+		return { id, dataSize, headerSize: id.size + dataSize.size };
+	}
+
+	public static async fromBlob(blob: BlobLike): Promise<Element> {
+		const header = await Element.readHeader(blob);
+		const dataStart = header.headerSize;
+		const dataEnd = header.dataSize.unknown ?
+			blob.size :
+			Math.min(dataStart + Number(header.dataSize.bigint), blob.size);
 		const dataBlob = blob.slice(dataStart, dataEnd);
-		return new Element(idVint, sizeVint, dataBlob);
+		return new Element(header.id, header.dataSize, dataBlob);
 	}
 }
 
 
 export class Stream {
-	private cachedChildren: Element[] = [];
-
 	constructor(private readonly blob: BlobLike) {}
 
-	private get cachedChildrenSize(): number {
-		return this.cachedChildren.reduce((sum, child) => sum + child.size, 0);
-	}
-
 	private async *childrenGenerator(): AsyncGenerator<Element> {
-		for (const cached of this.cachedChildren) {
-			yield cached;
-		}
-		let offset = this.cachedChildrenSize;
+		let offset = 0;
 		const blob = this.blob;
 		while (offset < blob.size) {
 			const element = await Element.fromBlob(
 				blob.slice(offset),
 			);
-			this.cachedChildren.push(element);
 			offset += element.size;
 			yield element;
-		}
-		if (offset !== this.cachedChildrenSize) {
-			throw new Error("offset !== this.cachedChildrenSize");
 		}
 	}
 

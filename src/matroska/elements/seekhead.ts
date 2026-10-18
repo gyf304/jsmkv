@@ -1,4 +1,4 @@
-import { Cluster, Cues, Info, Tags, Tracks, type Segment } from "./index.js";
+import { Attachments, Cluster, Cues, Info, Tags, Tracks, type Segment } from "./index.js";
 import * as ebml from "../../ebml/index.js";
 
 export class Seek extends ebml.SchemaElement {
@@ -68,6 +68,7 @@ export class SeekPosition extends ebml.UintElement {
 			Tracks,
 			Cues,
 			Tags,
+			Attachments,
 		] as const;
 		for (const elementType of elementTypes) {
 			if (elementType.id === el.id.id) {

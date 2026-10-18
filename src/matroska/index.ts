@@ -9,22 +9,14 @@ export class File extends ebml.SchemaStream {
 	}
 
 	private async *segmentsGenerator(): AsyncGenerator<elements.Segment> {
-		let idx = 0;
 		for await (const child of this.stream.children) {
-			switch (idx % 2) {
-				case 0:
-					if (child.id.id !== elements.EBMLHead.id) {
-						throw new Error("Expected EBMLHead");
-					}
-					break;
-				case 1:
-					if (child.id.id !== elements.Segment.id) {
-						throw new Error("Expected Segment");
-					}
-					yield new elements.Segment(child);
-					break;
+			if (child.id.id === elements.Segment.id) {
+				yield new elements.Segment(child);
+			} else if (child.id.id === ebml.VoidElement.id || child.id.id === ebml.Crc32Element.id) {
+				continue;
+			} else if (child.id.id !== elements.EBMLHead.id) {
+				throw new Error(`Unexpected top-level element ${child.id.toString()}`);
 			}
-			idx++;
 		}
 	}
 

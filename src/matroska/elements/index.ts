@@ -1,12 +1,14 @@
 import * as ebml from "../../ebml/index.js";
 
-import { Cluster } from "./cluster.js";
+import { Attachments } from "./attachments.js";
+import { Cluster, ClusterAwareStream } from "./cluster.js";
 import { CuePoint, Cues } from "./cues.js";
 import { Info } from "./info.js";
 import { SeekHead } from "./seekhead.js";
 import { Tags } from "./tags.js";
 import { Tracks } from "./tracks.js";
 
+export * from "./attachments.js";
 export * from "./chapters.js";
 export * from "./cluster.js";
 export * from "./cues.js";
@@ -54,10 +56,14 @@ export class Segment extends ebml.SchemaElement {
 	public static readonly id = 0x18538067;
 	public static readonly level = 0;
 	public static readonly displayName = "Segment";
-	public static readonly knownChildren = [SeekHead, Info, Tracks, Cluster, Cues, Tags];
+	public static readonly knownChildren = [SeekHead, Info, Tracks, Attachments, Cluster, Cues, Tags];
 
 	constructor(public readonly element: ebml.Element) {
 		super(element);
+	}
+
+	protected override createStream(): ebml.Stream {
+		return new ClusterAwareStream(this.element.data);
 	}
 
 	public get info() {
@@ -66,6 +72,10 @@ export class Segment extends ebml.SchemaElement {
 
 	public get tracks() {
 		return this.maybeOne(Tracks, { before: Cluster });
+	}
+
+	public get attachments() {
+		return this.many(Attachments, { before: Cluster });
 	}
 
 	/**
@@ -90,11 +100,11 @@ export class Segment extends ebml.SchemaElement {
 			return undefined;
 		}
 		// cannot find Cues in SeekHead, try to find it in Segment
-		for await (const child of this.element.children) {
-			if (child.id.id === Cues.id) {
-				return new Cues(child, this);
+		for await (const child of this.children) {
+			if (child instanceof Cues) {
+				return child;
 			}
-			if (child.id.id === Cluster.id) {
+			if (child instanceof Cluster) {
 				break;
 			}
 		}
@@ -113,14 +123,15 @@ export class Segment extends ebml.SchemaElement {
 	}
 
 	public async seekCluster(clusterPosition: number): Promise<Cluster> {
-		const blob = this.element.data.slice(clusterPosition);
-		const el = await ebml.Element.fromBlob(blob);
-		return new Cluster(el, this);
+		for await (const cluster of this.seekClusters(clusterPosition)) {
+			return cluster;
+		}
+		throw new Error("Cluster not found");
 	}
 
 	public async *seekClusters(clusterPosition: number): AsyncGenerator<Cluster> {
 		const blob = this.element.data.slice(clusterPosition);
-		const stream = new ebml.Stream(blob);
+		const stream = new ClusterAwareStream(blob);
 		for await (const el of stream.children) {
 			if (el.id.id !== Cluster.id) {
 				break;
