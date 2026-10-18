@@ -15,8 +15,8 @@ registerMatroska(shaka);
 const player = new shaka.Player();
 player.configure({
 	streaming: {
-		bufferingGoal: 60,
-		rebufferingGoal: 30,
+		bufferingGoal: 30,
+		rebufferingGoal: 15,
 	},
 });
 
