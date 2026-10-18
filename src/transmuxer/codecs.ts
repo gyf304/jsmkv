@@ -24,13 +24,13 @@ export function hevcMimeCodec(cpd: ArrayBuffer) {
 	const gpIDC = v.getUint8(1) & 0x1F;
 	const gpCompatibility = bitReverse32(v.getUint32(2));
 	const gpLevelIdc = v.getUint8(12);
-	const gpConstraintFlags = hexString(cpd.slice(6, 12)).replace(/(00)*$/, "");
+	const gpConstraintFlags = hexString(cpd.slice(6, 12)).toLowerCase().replace(/(00)*$/, "");
 	return `hvc1.${gpSpace}${gpIDC}.${gpCompatibility}.${gpTierFlag}${gpLevelIdc}.${gpConstraintFlags}`;
 }
 
 export function videoMimeCodec(codecID: string, codecPrivate: ArrayBuffer): string | undefined {
 	if (codecID === "V_MPEG4/ISO/AVC") {
-		return `avc1.${hexString(codecPrivate.slice(1, 4))}`;
+		return `avc1.${hexString(codecPrivate.slice(1, 4)).toLowerCase()}`;
 	}
 	if (codecID === "V_MPEGH/ISO/HEVC") {
 		return hevcMimeCodec(codecPrivate);

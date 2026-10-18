@@ -33,7 +33,8 @@ export class MKVVideoPlayer {
 		let objectUrl: string | undefined;
 		let onSeeking: (() => void) | undefined;
 		const video = this.video;
-		try {
+    try {
+      const MediaSource = window.MediaSource ?? (window as any).ManagedMediaSource;
 			// initialize muxer
 			const muxer = new MatroskaToFmp4Muxer(this.source);
 			const mimeType = await muxer.getMimeType();
@@ -41,22 +42,21 @@ export class MKVVideoPlayer {
 			const initSegment = await muxer.getInitSegment();
 
 			// initialize video element and media source
-			const ms = new MediaSource();
+      const ms = new MediaSource();
 			mediaSource = ms;
-			objectUrl = URL.createObjectURL(ms);
+      objectUrl = URL.createObjectURL(ms);
+      if (MediaSource === (window as any).ManagedMediaSource) {
+        video.disableRemotePlayback = true;
+      }
 			video.src = objectUrl;
 
 			await Promise.race([
 				new Promise<void>((resolve) => {
-					const sourceopen = () => {
-						ms.removeEventListener("sourceopen", sourceopen);
-						resolve();
-					};
-					ms.addEventListener("sourceopen", sourceopen);
+					ms.addEventListener("sourceopen", () => resolve(), { once: true });
 				}),
 				this.destroyPromise,
-			]);
-			if (this.destroyed) {
+      ]);
+      if (this.destroyed) {
 				return;
 			}
 

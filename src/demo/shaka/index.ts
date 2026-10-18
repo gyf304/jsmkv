@@ -12,6 +12,8 @@ const urlParam = new URLSearchParams(location.search).get("url");
 urlInput.value = urlParam ?? DEFAULT_URL;
 
 registerMatroska(shaka);
+console.log(await shaka.Player.probeSupport());
+
 const player = new shaka.Player(video);
 
 const showStatus = (message: string) => {

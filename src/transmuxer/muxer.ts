@@ -305,7 +305,7 @@ export class MatroskaToFmp4Muxer {
 						mimeCodec:
 							codecID === "V_MPEGH/ISO/HEVC" ?
 							hevcMimeCodec(codecPrivateData) :
-							`avc1.${hexString(codecPrivateData.slice(1, 4))}`,
+							`avc1.${hexString(codecPrivateData.slice(1, 4)).toLowerCase()}`,
 						trak: m.trak(
 							m.tkhd({
 								trackId: trackNumber,

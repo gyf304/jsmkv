@@ -27,7 +27,8 @@ export class MatroskaShakaTransmuxer implements ShakaTransmuxer {
 		const base = mimeType.toLowerCase().split(";")[0].trim();
 		if (base !== MATROSKA_MIME_TYPE && base !== "audio/x-matroska") {
 			return false;
-		}
+    }
+    const MediaSource = window.MediaSource ?? (window as any).ManagedMediaSource;
 		if (typeof MediaSource === "undefined") {
 			return false;
 		}
