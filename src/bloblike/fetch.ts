@@ -18,11 +18,7 @@ export class FetchBlobLike implements BlobLike {
 		cacheSize: number = 16 * 1024 * 1024,
 		blockSize: number = 1024 * 1024
 	): Promise<FetchBlobLike> {
-		const response = await fetch(url, { method: "HEAD" });
-		if (!response.ok) {
-			throw new Error("Failed to fetch blob");
-		}
-		const size = Number(response.headers.get("Content-Length"));
+		const size = await FetchBlobLike.getSize(url);
 		return new FetchBlobLike(url, size, 0, blockSize, new LRUCache({
 			maxSize: cacheSize,
 			sizeCalculation: (buffer) => buffer.byteLength,
@@ -44,6 +40,42 @@ export class FetchBlobLike implements BlobLike {
 				return await response.arrayBuffer();
 			}
 		}));
+	}
+
+	private static async getSize(url: string): Promise<number> {
+		try {
+			const response = await fetch(url, { method: "HEAD" });
+			if (response.ok) {
+				const length = response.headers.get("Content-Length");
+				if (length !== null) {
+					const size = Number(length);
+					if (Number.isFinite(size)) {
+						return size;
+					}
+				}
+			}
+		} catch {
+			// The server may not allow HEAD (e.g. CORS), fall back to a range GET.
+		}
+
+		const response = await fetch(url, {
+			headers: {
+				"Range": "bytes=0-0",
+			},
+			redirect: "follow",
+		});
+		if (!response.ok) {
+			throw new Error("Failed to fetch blob");
+		}
+		if (response.status !== 206) {
+			throw new Error("Server does not support range requests");
+		}
+		const contentRange = response.headers.get("Content-Range");
+		const size = Number(contentRange?.split("/")[1] ?? NaN);
+		if (!Number.isFinite(size)) {
+			throw new Error("Failed to determine blob size");
+		}
+		return size;
 	}
 
 	public slice(start: number = 0, end: number = this.size): BlobLike {

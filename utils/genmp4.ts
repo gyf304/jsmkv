@@ -1,5 +1,5 @@
 import { CacheBlobLike } from "../src/bloblike/cache.js";
-import { MKVToMP4Muxer } from "../src/player/index.js";
+import { MatroskaToFmp4Muxer } from "../src/transmuxer/muxer.js";
 
 const filename = process.argv[2];
 const outputFilename = process.argv[3];
@@ -11,7 +11,7 @@ const outputFile = Bun.file(outputFilename);
 
 const writer = outputFile.writer();
 
-const muxer = new MKVToMP4Muxer(file);
+const muxer = new MatroskaToFmp4Muxer(file);
 const initSegment = await muxer.getInitSegment();
 writer.write(initSegment);
 console.log("Writing init segment", initSegment.byteLength);

@@ -15,21 +15,40 @@
       "types": "./dist/esm/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
+    },
+    "./transmuxer": {
+      "types": "./dist/esm/transmuxer/index.d.ts",
+      "import": "./dist/esm/transmuxer/index.js",
+      "require": "./dist/cjs/transmuxer/index.js"
+    },
+    "./shaka": {
+      "types": "./dist/esm/shaka/index.d.ts",
+      "import": "./dist/esm/shaka/index.js",
+      "require": "./dist/cjs/shaka/index.js"
     }
   },
   "dependencies": {
     "lru-cache": "^10.2.2"
+  },
+  "peerDependencies": {
+    "shaka-player": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "shaka-player": {
+      "optional": true
+    }
   },
   "files": [ "dist" ],
   "devDependencies": {
     "@types/web": "^0.0.126",
     "bun-types": "latest",
     "npm": "^10.8.1",
+    "shaka-player": "^5.3.0",
     "typescript": "^5.4.5"
   },
   "scripts": {
     "cli": "bun src/cli.ts",
-    "build:demo": "bun demo/build.ts",
+    "build:demo": "bun src/demo/build.ts",
     "build:cjs": "tsc -p tsconfig.cjs.json && cp utils/cjs-package.json dist/cjs/package.json",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:polyfill": "bun build --minify src/player/polyfill.ts > dist/polyfill.js",

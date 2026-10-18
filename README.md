@@ -7,10 +7,12 @@ P.S. this is not a production ready library. It should be considered a proof of 
 
 P.P.S. If someone can recommend me a good MP4 validator, I would be very grateful.
 
-## Demo
-[Demo (HTTP)](https://gyf304.github.io/jsmkv/demo-http.html): Video player streaming from a http/https server.
+## Demos
+[Demo (HTTP)](https://gyf304.github.io/jsmkv/demo/http/): Video player streaming from a http/https server.
 
-[Demo (File)](https://gyf304.github.io/jsmkv/demo-file.html): Video player streaming from a file input.
+[Demo (File)](https://gyf304.github.io/jsmkv/demo/file/): Video player streaming from a file input.
+
+[Demo (Shaka)](https://gyf304.github.io/jsmkv/demo/shaka/): Shaka Player with the Matroska manifest parser and transmuxer.
 
 ## Limitations
 - The player does not support Safari. Safari rejects the fMP4 initialization

@@ -63,7 +63,7 @@ export class Segment extends ebml.SchemaElement {
 	}
 
 	protected override createStream(): ebml.Stream {
-		return new ClusterAwareStream(this.element.data);
+		return new ClusterAwareStream(this.element.data, this.element.dataOffset);
 	}
 
 	public get info() {
@@ -131,7 +131,7 @@ export class Segment extends ebml.SchemaElement {
 
 	public async *seekClusters(clusterPosition: number): AsyncGenerator<Cluster> {
 		const blob = this.element.data.slice(clusterPosition);
-		const stream = new ClusterAwareStream(blob);
+		const stream = new ClusterAwareStream(blob, this.element.dataOffset + clusterPosition);
 		for await (const el of stream.children) {
 			if (el.id.id !== Cluster.id) {
 				break;

@@ -8,7 +8,13 @@ export interface ElementHeader {
 }
 
 export class Element {
-	constructor(public readonly id: Vint, public readonly dataSize: Vint, public readonly data: BlobLike) {
+	constructor(
+		public readonly id: Vint,
+		public readonly dataSize: Vint,
+		public readonly data: BlobLike,
+		public readonly offset: number = 0,
+		public readonly dataOffset: number = 0,
+	) {
 	}
 
 	public get size(): number {
@@ -16,7 +22,7 @@ export class Element {
 	}
 
 	public get stream(): Stream {
-		return new Stream(this.data);
+		return new Stream(this.data, this.dataOffset);
 	}
 
 	public get children(): AsyncGenerator<Element> {
@@ -32,20 +38,20 @@ export class Element {
 		return { id, dataSize, headerSize: id.size + dataSize.size };
 	}
 
-	public static async fromBlob(blob: BlobLike): Promise<Element> {
+	public static async fromBlob(blob: BlobLike, baseOffset: number = 0): Promise<Element> {
 		const header = await Element.readHeader(blob);
 		const dataStart = header.headerSize;
 		const dataEnd = header.dataSize.unknown ?
 			blob.size :
 			Math.min(dataStart + Number(header.dataSize.bigint), blob.size);
 		const dataBlob = blob.slice(dataStart, dataEnd);
-		return new Element(header.id, header.dataSize, dataBlob);
+		return new Element(header.id, header.dataSize, dataBlob, baseOffset, baseOffset + dataStart);
 	}
 }
 
 
 export class Stream {
-	constructor(private readonly blob: BlobLike) {}
+	constructor(private readonly blob: BlobLike, private readonly baseOffset: number = 0) {}
 
 	private async *childrenGenerator(): AsyncGenerator<Element> {
 		let offset = 0;
@@ -53,6 +59,7 @@ export class Stream {
 		while (offset < blob.size) {
 			const element = await Element.fromBlob(
 				blob.slice(offset),
+				this.baseOffset + offset,
 			);
 			offset += element.size;
 			yield element;

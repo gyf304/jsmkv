@@ -36,14 +36,14 @@ jobs:
       - name: Build Demo
         run: |
           bun install
-          bun build:demo
+          bun run build:demo
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
-          path: ./demo/dist
+          path: ./dist/demo
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

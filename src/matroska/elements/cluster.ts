@@ -56,8 +56,11 @@ export class Cluster extends ebml.SchemaElement {
  * handing them to the generic EBML parser.
  */
 export class ClusterAwareStream extends ebml.Stream {
-	constructor(private readonly source: BlobLike) {
-		super(source);
+	constructor(
+		private readonly source: BlobLike,
+		private readonly sourceOffset: number = 0,
+	) {
+		super(source, sourceOffset);
 	}
 
 	private async *generator(): AsyncGenerator<ebml.Element> {
@@ -69,7 +72,13 @@ export class ClusterAwareStream extends ebml.Stream {
 			const dataEnd = header.dataSize.unknown ?
 				(header.id.id === Cluster.id ? await findClusterEnd(blob, dataStart) : blob.size) :
 				Math.min(dataStart + Number(header.dataSize.bigint), blob.size);
-			const element = new ebml.Element(header.id, header.dataSize, blob.slice(dataStart, dataEnd));
+			const element = new ebml.Element(
+				header.id,
+				header.dataSize,
+				blob.slice(dataStart, dataEnd),
+				this.sourceOffset + offset,
+				this.sourceOffset + dataStart,
+			);
 			offset += element.size;
 			yield element;
 		}

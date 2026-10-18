@@ -19,5 +19,6 @@
       "bun-types", // add Bun global
       "@types/web",
     ]
-  }
+  },
+  "exclude": ["dist", "demo/dist"]
 }

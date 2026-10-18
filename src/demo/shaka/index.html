@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>MKV Player Demo</title>
+		<title>MKV Shaka Player Demo</title>
 		<style>
 			html, body {
 				margin: 0;
@@ -9,6 +9,7 @@
 				width: 100%;
 				height: 100%;
 				background-color: black;
+				font-family: sans-serif;
 			}
 			video {
 				width: 100%;
@@ -29,6 +30,30 @@
 			#overlay > * {
 				pointer-events: initial;
 			}
+			#controls {
+				position: absolute;
+				top: 0;
+				left: 0;
+				display: flex;
+				gap: 8px;
+				padding: 8px;
+			}
+			#url {
+				width: min(60vw, 640px);
+			}
+			#status {
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				max-width: 100%;
+				padding: 8px;
+				color: white;
+				background-color: rgb(0 0 0 / 60%);
+				white-space: pre-wrap;
+			}
+			#status:empty {
+				display: none;
+			}
 			.github-link {
 				position: absolute;
 				top: 0;
@@ -42,39 +67,39 @@
 				height: 32px;
 				filter: invert(1);
 			}
-			.open-file {
+			.attribution {
 				position: absolute;
-				top: 0;
-				left: 0;
+				bottom: 0;
+				right: 0;
 				padding: 8px;
 				color: white;
+				text-align: right;
 				text-decoration: none;
+			}
+			.attribution a {
+				color: white;
 			}
 		</style>
 	</head>
 	<body>
-		<video id="mkv-player" class="mkv-player" controls>
-		</video>
+		<video id="video" controls playsinline></video>
 		<div id="overlay">
+			<div id="controls">
+				<input id="url" type="url" placeholder="MKV URL" />
+				<button id="load">Load</button>
+			</div>
 			<div class="github-link">
 				<a href="https://github.com/gyf304/jsmkv" target="_blank">
 					<img class="github-logo" src="https://unpkg.com/simple-icons@v12/icons/github.svg" alt="GitHub">
 				</a>
 			</div>
-			<div class="open-file">
-				<input id="file-input" type="file" accept=".mkv" />
-			</div>
+			<a class="attribution" href="https://cloud.blender.org/spring" target="_blank">
+				&copy; Blender Foundation | cloud.blender.org/spring
+				<br>
+				Licensed under CC-BY 4.0
+			</a>
+			<div id="status"></div>
 		</div>
-		<script type="module">
-			import { player, bloblike } from "./index.js";
-			const fileInput = document.getElementById("file-input");
-			fileInput.addEventListener("change", async () => {
-				let file = fileInput.files[0];
-				if (file) {
-					file = new bloblike.CacheBlobLike(file);
-					const mkvPlayer = new player.MKVVideoPlayer(file, document.getElementById("mkv-player"));
-				}
-			});
-		</script>
+		<script type="module" src="index.ts"></script>
 	</body>
 </html>
