@@ -1,6 +1,6 @@
 import { $ } from "bun";
 
-const demos = ["file", "http", "shaka"] as const;
+const demos = ["shaka"] as const;
 const sample = "dist/demo/spring-blender-open-movie.mkv";
 
 await $`mkdir -p dist/demo`;

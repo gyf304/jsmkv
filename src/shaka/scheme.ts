@@ -1,139 +1,94 @@
 import type shaka from "shaka-player";
-import type { BlobLike } from "../bloblike/index.js";
-import { FetchBlobLike } from "../bloblike/index.js";
-import { parseMatroskaInfo, readMatroskaSegment } from "../transmuxer/index.js";
-import type { MatroskaAttachmentInfo } from "../transmuxer/metadata.js";
-import type { ShakaNamespace } from "./types.js";
+import { MATROSKA_SCHEME, sources } from "./manifest.js";
 
-const SCHEME = "matroska";
-const PREFIX = `${SCHEME}://attachment/`;
+type ShakaNamespace = typeof import("shaka-player").default;
 
-interface AttachmentStore {
-	attachments: Map<string, MatroskaAttachmentInfo>;
-	source: BlobLike;
-}
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
-const stores = new Map<string, Promise<AttachmentStore>>();
-const registered = new WeakSet<object>();
-
-export function getMatroskaAttachmentBase(assetUri: string): string {
-	return `${PREFIX}${encodeAssetUri(assetUri)}/`;
-}
-
-export function getMatroskaAttachmentUri(assetUri: string, name: string): string {
-	return `${getMatroskaAttachmentBase(assetUri)}${encodeURIComponent(name)}`;
-}
-
-export function primeMatroskaAttachments(
-	assetUri: string,
-	attachments: MatroskaAttachmentInfo[],
-	source: BlobLike,
-): void {
-	stores.set(assetUri, Promise.resolve({
-		attachments: new Map(attachments.map((attachment) => [attachment.name, attachment])),
-		source,
-	}));
-}
-
-export function clearMatroskaAttachmentCache(assetUri: string): void {
-	stores.delete(assetUri);
-}
-
-export function registerMatroskaAttachmentScheme(shaka: ShakaNamespace): void {
-	if (registered.has(shaka)) {
-		return;
-	}
-	registered.add(shaka);
-
+export function registerMatroskaScheme(shaka: ShakaNamespace): void {
 	shaka.net.NetworkingEngine.registerScheme(
-		SCHEME,
-		(uri, request) => shaka.util.AbortableOperation.notAbortable((async () => {
-			const parsed = parseAttachmentUri(uri);
-			if (parsed === undefined) {
-				throw createHttpError(shaka, uri, 400);
-			}
-			const store = await getAttachments(parsed.assetUri);
-			if (parsed.name === "") {
-				const index = Array.from(store.attachments.values()).map((attachment) => ({
-					name: attachment.name,
-					mimeType: attachment.mimeType,
-					uid: attachment.uid,
-					description: attachment.description,
-					offset: attachment.offset,
-					size: attachment.size,
-					uri: getMatroskaAttachmentUri(parsed.assetUri, attachment.name),
-				}));
-				return createResponse(
-					uri, new TextEncoder().encode(JSON.stringify(index)),
-					"application/json", request,
-				);
-			}
-
-			const attachment = store.attachments.get(parsed.name);
-			if (attachment === undefined) {
-				throw createHttpError(shaka, uri, 404);
-			}
-			const data = new Uint8Array(await store.source
-				.slice(attachment.offset, attachment.offset + attachment.size)
-				.arrayBuffer());
-			return createResponse(uri, data, attachment.mimeType, request);
-		})()),
+		MATROSKA_SCHEME,
+		(uri, request) => shaka.util.AbortableOperation.notAbortable(
+			handleRequest(shaka, uri, request),
+		),
 		shaka.net.NetworkingEngine.PluginPriority.APPLICATION,
 	);
 }
 
-async function getAttachments(assetUri: string): Promise<AttachmentStore> {
-	let store = stores.get(assetUri);
-	if (store === undefined) {
-		store = (async () => {
-			const source = await FetchBlobLike.fromUrl(assetUri);
-			const segment = await readMatroskaSegment(source);
-			const info = await parseMatroskaInfo(segment);
-			return {
-				attachments: new Map(info.attachments.map((attachment) => [attachment.name, attachment])),
-				source,
-			};
-		})();
-		stores.set(assetUri, store);
-		store.catch(() => stores.delete(assetUri));
+async function handleRequest(
+	shaka: ShakaNamespace,
+	uri: string,
+	request: shaka.extern.Request,
+): Promise<shaka.extern.Response> {
+	const url = new URL(uri);
+	const transmuxer = sources.get(url.hostname);
+	if (transmuxer === undefined) {
+		throw createHttpError(shaka, uri, 404);
 	}
-	return await store;
+	const [name, ...route] = url.pathname.slice(1).split("/");
+	if (name === "attachments" && route.length === 1) {
+		const attachment = transmuxer.attachments[Number(route[0])];
+		if (attachment === undefined) {
+			throw createHttpError(shaka, uri, 404);
+		}
+		const data = new Uint8Array(await attachment.data.arrayBuffer());
+		return createResponse(uri, data, attachment.mediaType, request);
+	}
+
+	if (name === "tracks" && route.length === 2 && route[1] === "init.mp4") {
+		const track = transmuxer.tracks.find(
+			(candidate) => candidate.info.number === Number(route[0]),
+		);
+		if (track === undefined) {
+			throw createHttpError(shaka, uri, 404);
+		}
+		const mimeType = track.info.type === "text" ?
+			track.info.mimeType :
+			`${track.info.type}/mp4`;
+		return createResponse(uri, track.init, mimeType, request);
+	}
+
+	if (name === "tracks" && route.length === 3 && route[1] === "segments") {
+		const track = transmuxer.tracks.find(
+			(candidate) => candidate.info.number === Number(route[0]),
+		);
+		const segmentIndex = route[2].endsWith(".m4s") ?
+			Number(route[2].slice(0, -4)) :
+			undefined;
+		const cuePoint = segmentIndex === undefined ? undefined : track?.cuePoints[segmentIndex];
+		if (track === undefined || cuePoint === undefined) {
+			throw createHttpError(shaka, uri, 404);
+		}
+		const fragments: Uint8Array[] = [];
+		for await (const fragment of cuePoint.streamFragments()) {
+			fragments.push(fragment);
+		}
+		const mimeType = track.info.type === "text" ?
+			track.info.mimeType :
+			`${track.info.type}/mp4`;
+		let data = concat(fragments);
+		if (track.info.type === "text" && track.info.mimeType === "text/vtt") {
+			const text = textDecoder.decode(data);
+			if (!text.startsWith("WEBVTT")) {
+				data = textEncoder.encode(`WEBVTT\n\n${text}`);
+			}
+		}
+		return createResponse(uri, data, mimeType, request);
+	}
+
+	throw createHttpError(shaka, uri, 400);
 }
 
-function parseAttachmentUri(uri: string): { assetUri: string; name: string } | undefined {
-	if (!uri.startsWith(PREFIX)) {
-		return undefined;
+function concat(fragments: Uint8Array[]): Uint8Array {
+	const length = fragments.reduce((sum, fragment) => sum + fragment.byteLength, 0);
+	const output = new Uint8Array(length);
+	let offset = 0;
+	for (const fragment of fragments) {
+		output.set(fragment, offset);
+		offset += fragment.byteLength;
 	}
-	const rest = uri.slice(PREFIX.length);
-	const slash = rest.indexOf("/");
-	if (slash < 0) {
-		return {
-			assetUri: decodeAssetUri(rest),
-			name: "",
-		};
-	}
-	const id = rest.slice(0, slash);
-	const name = decodeURIComponent(rest.slice(slash + 1));
-	return {
-		assetUri: decodeAssetUri(id),
-		name,
-	};
-}
-
-function encodeAssetUri(assetUri: string): string {
-	const bytes = new TextEncoder().encode(assetUri);
-	let binary = "";
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function decodeAssetUri(id: string): string {
-	const base64 = id.replace(/-/g, "+").replace(/_/g, "/");
-	const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
-	const binary = atob(padded);
-	return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+	return output;
 }
 
 function createResponse(
@@ -142,53 +97,24 @@ function createResponse(
 	mimeType: string,
 	request: shaka.extern.Request,
 ): shaka.extern.Response {
-	const range = parseRange(getHeader(request.headers, "range"), data.byteLength);
-	const body = range === undefined ? data : data.subarray(range.start, range.end + 1);
-	const headers: Record<string, string> = range === undefined ? {
-		"Content-Type": mimeType,
-		"Content-Length": String(body.byteLength),
-	} : {
-		"Content-Type": mimeType,
-		"Content-Length": String(body.byteLength),
-		"Content-Range": `bytes ${range.start}-${range.end}/${data.byteLength}`,
-	};
 	return {
 		uri,
 		originalUri: uri,
 		originalRequest: request,
-		data: body,
-		headers,
-		status: range === undefined ? 200 : 206,
+		data,
+		headers: {
+			"Content-Type": mimeType,
+			"Content-Length": String(data.byteLength),
+		},
+		status: 200,
 	};
 }
 
-function parseRange(header: string | undefined, size: number): { start: number; end: number } | undefined {
-	if (header === undefined) {
-		return undefined;
-	}
-	const match = /^bytes=(\d+)-(\d*)$/.exec(header.trim());
-	if (match === null) {
-		return undefined;
-	}
-	const start = Number(match[1]);
-	const end = match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
-	if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
-		return undefined;
-	}
-	return { start, end };
-}
-
-function getHeader(headers: Record<string, string>, name: string): string | undefined {
-	const lower = name.toLowerCase();
-	for (const [key, value] of Object.entries(headers)) {
-		if (key.toLowerCase() === lower) {
-			return value;
-		}
-	}
-	return undefined;
-}
-
-function createHttpError(shaka: ShakaNamespace, uri: string, status: number): Error {
+function createHttpError(
+	shaka: ShakaNamespace,
+	uri: string,
+	status: number,
+): Error {
 	return new shaka.util.Error(
 		shaka.util.Error.Severity.RECOVERABLE,
 		shaka.util.Error.Category.NETWORK,

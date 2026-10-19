@@ -1,21 +1,17 @@
 # jsmkv
 
-JSMKV is a in browser MKV (Matroska) file player and a suite of typescript
-tools for working with Matroska files.
+JSMKV is a suite of TypeScript tools for working with Matroska (MKV) files,
+including a Shaka Player integration.
 
 P.S. this is not a production ready library. It should be considered a proof of concept.
 
 P.P.S. If someone can recommend me a good MP4 validator, I would be very grateful.
 
 ## Demos
-[Demo (HTTP)](https://gyf304.github.io/jsmkv/http/): Video player streaming from a http/https server.
-
-[Demo (File)](https://gyf304.github.io/jsmkv/file/): Video player streaming from a file input.
-
-[Demo (Shaka)](https://gyf304.github.io/jsmkv/shaka/): Shaka Player with the Matroska manifest parser and transmuxer.
+[Demo (Shaka)](https://gyf304.github.io/jsmkv/shaka/): Shaka Player using the matroska:// protocol.
 
 ## Limitations
-- The player only supports H.264/H.265 video and AAC audio.
-- The player does not (yet) support subtitles.
+- Only H.264/H.265 video and AAC audio are supported.
+- Subtitle text and attachments are exposed, but attachment fonts are not registered with Shaka automatically.
 - The library does not support all matroska features. e.g. videos not using
   SimpleBlock elements will not play.

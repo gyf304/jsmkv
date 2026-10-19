@@ -1,9 +1,13 @@
 import type shaka from "shaka-player";
-import { LRUCache } from "lru-cache";
 import type { BlobLike } from "../bloblike/index.js";
-import type { ShakaNamespace, ShakaPlayerInterface } from "./types.js";
 
-export class NetworkingBlobLike implements BlobLike {
+type ShakaNamespace = typeof import("shaka-player").default;
+
+/**
+ * A network-backed BlobLike with no cache. Each slice is fetched with one
+ * range request; CacheBlobLike is responsible for block caching.
+ */
+export class NetworkBlobLike implements BlobLike {
 	private constructor(
 		private readonly shaka: ShakaNamespace,
 		private readonly networkingEngine: shaka.net.NetworkingEngine,
@@ -11,42 +15,53 @@ export class NetworkingBlobLike implements BlobLike {
 		public readonly uri: string,
 		public readonly size: number,
 		public readonly offset: number,
-		public readonly blockSize: number,
-		private readonly cache: LRUCache<number, ArrayBuffer>,
 	) {}
 
 	public static async fromUri(
 		shaka: ShakaNamespace,
-		playerInterface: ShakaPlayerInterface,
+		playerInterface: shaka.extern.ManifestParser.PlayerInterface,
 		uri: string,
-		cacheSize: number = 16 * 1024 * 1024,
-		blockSize: number = 16 * 1024,
-	): Promise<NetworkingBlobLike> {
+	): Promise<NetworkBlobLike> {
 		const engine = playerInterface.networkingEngine;
 		const retryParameters = playerInterface.getStreamingRetryParameters();
-		const size = await NetworkingBlobLike.getSize(shaka, engine, retryParameters, uri);
-		return new NetworkingBlobLike(
-			shaka,
-			engine,
-			retryParameters,
-			uri,
-			size,
-			0,
-			blockSize,
-			new LRUCache({
-				maxSize: cacheSize,
-				sizeCalculation: (buffer) => buffer.byteLength,
-				fetchMethod: async (index) => {
-					const start = index * blockSize;
-					const end = Math.min(start + blockSize, size);
-					const response = await NetworkingBlobLike.request(
-						shaka, engine, retryParameters, uri, "GET",
-						{ Range: `bytes=${start}-${end - 1}` },
-					);
-					return NetworkingBlobLike.toArrayBuffer(response.data);
-				},
-			}),
+		const size = await NetworkBlobLike.getSize(
+			shaka, engine, retryParameters, uri);
+		return new NetworkBlobLike(shaka, engine, retryParameters, uri, size, 0);
+	}
+
+	public slice(start: number = 0, end: number = this.size): BlobLike {
+		if (start < 0) {
+			throw new Error("Start must be non-negative");
+		}
+		if (end < start) {
+			throw new Error("End must be greater than or equal to start");
+		}
+		if (end > this.size) {
+			throw new Error("End must be less than or equal to size");
+		}
+		return new NetworkBlobLike(
+			this.shaka,
+			this.networkingEngine,
+			this.retryParameters,
+			this.uri,
+			end - start,
+			this.offset + start,
 		);
+	}
+
+	public async arrayBuffer(): Promise<ArrayBuffer> {
+		if (this.size === 0) {
+			return new ArrayBuffer(0);
+		}
+		const response = await NetworkBlobLike.request(
+			this.shaka,
+			this.networkingEngine,
+			this.retryParameters,
+			this.uri,
+			"GET",
+			{ Range: `bytes=${this.offset}-${this.offset + this.size - 1}` },
+		);
+		return NetworkBlobLike.toArrayBuffer(response.data);
 	}
 
 	private static async getSize(
@@ -56,10 +71,9 @@ export class NetworkingBlobLike implements BlobLike {
 		uri: string,
 	): Promise<number> {
 		try {
-			const head = await NetworkingBlobLike.request(
-				shaka, engine, retryParameters, uri, "HEAD", {},
-			);
-			const length = NetworkingBlobLike.header(head.headers, "content-length");
+			const head = await NetworkBlobLike.request(
+				shaka, engine, retryParameters, uri, "HEAD", {});
+			const length = NetworkBlobLike.header(head.headers, "content-length");
 			if (length !== undefined) {
 				const size = Number(length);
 				if (Number.isFinite(size)) {
@@ -70,13 +84,13 @@ export class NetworkingBlobLike implements BlobLike {
 			// Some scheme plugins do not support HEAD; fall back to a range GET.
 		}
 
-		const response = await NetworkingBlobLike.request(
+		const response = await NetworkBlobLike.request(
 			shaka, engine, retryParameters, uri, "GET",
 			{ Range: "bytes=0-0" },
 		);
-		const contentRange = NetworkingBlobLike.header(response.headers, "content-range");
+		const contentRange = NetworkBlobLike.header(response.headers, "content-range");
 		const total = contentRange?.split("/")[1];
-		const size = Number(total ?? NetworkingBlobLike.header(response.headers, "content-length") ?? NaN);
+		const size = Number(total ?? NetworkBlobLike.header(response.headers, "content-length") ?? NaN);
 		if (!Number.isFinite(size)) {
 			throw new Error(`Failed to determine size of ${uri}`);
 		}
@@ -100,7 +114,10 @@ export class NetworkingBlobLike implements BlobLike {
 		).promise as shaka.extern.Response;
 	}
 
-	private static header(headers: Record<string, string>, name: string): string | undefined {
+	private static header(
+		headers: Record<string, string>,
+		name: string,
+	): string | undefined {
 		const lower = name.toLowerCase();
 		for (const [key, value] of Object.entries(headers)) {
 			if (key.toLowerCase() === lower) {
@@ -115,35 +132,5 @@ export class NetworkingBlobLike implements BlobLike {
 			return data;
 		}
 		return new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice().buffer as ArrayBuffer;
-	}
-
-	public slice(start: number = 0, end: number = this.size): BlobLike {
-		end = Math.min(end, this.size);
-		return new NetworkingBlobLike(
-			this.shaka,
-			this.networkingEngine,
-			this.retryParameters,
-			this.uri,
-			end - start,
-			this.offset + start,
-			this.blockSize,
-			this.cache,
-		);
-	}
-
-	public async arrayBuffer(): Promise<ArrayBuffer> {
-		const buffer = new Uint8Array(this.size);
-		let inOffset = this.offset;
-		let outOffset = 0;
-		while (outOffset < this.size) {
-			const blockIndex = Math.floor(inOffset / this.blockSize);
-			const blockOffset = inOffset % this.blockSize;
-			const block = (await this.cache.fetch(blockIndex))!;
-			const blockLength = Math.min(this.size - outOffset, block.byteLength - blockOffset);
-			buffer.set(new Uint8Array(block, blockOffset, blockLength), outOffset);
-			inOffset += blockLength;
-			outOffset += blockLength;
-		}
-		return buffer.buffer as ArrayBuffer;
 	}
 }

@@ -1,34 +1,6 @@
 import type { Segment } from "./index.js";
-import type { BlobLike } from "../../bloblike/index.js";
 import * as ebml from "../../ebml/index.js";
 import { Vint } from "../../vint/index.js";
-
-const segmentChildIds = new Set([
-	0x114d9b74, // SeekHead
-	0x1549a966, // Info
-	0x1654ae6b, // Tracks
-	0x1043a770, // Chapters
-	0x1f43b675, // Cluster
-	0x1c53bb6b, // Cues
-	0x1941a469, // Attachments
-	0x1254c367, // Tags
-]);
-
-/**
- * Find the end of an unknown-size Cluster by scanning its children until a
- * Segment child (i.e. an element at the same or a higher level) appears.
- */
-export async function findClusterEnd(blob: BlobLike, dataStart: number): Promise<number> {
-	let offset = dataStart;
-	while (offset < blob.size) {
-		const header = await ebml.Element.readHeader(blob.slice(offset));
-		if (segmentChildIds.has(header.id.id) || header.dataSize.unknown) {
-			break;
-		}
-		offset += header.headerSize + Number(header.dataSize.bigint);
-	}
-	return Math.min(offset, blob.size);
-}
 
 export class Cluster extends ebml.SchemaElement {
 	public static readonly id = 0x1f43b675;
@@ -52,44 +24,6 @@ export class Cluster extends ebml.SchemaElement {
 
 	public get blockGroups() {
 		return this.many(BlockGroup);
-	}
-}
-
-/**
- * Stream over a Segment's children that bounds unknown-size Clusters before
- * handing them to the generic EBML parser.
- */
-export class ClusterAwareStream extends ebml.Stream {
-	constructor(
-		private readonly source: BlobLike,
-		private readonly sourceOffset: number = 0,
-	) {
-		super(source, sourceOffset);
-	}
-
-	private async *generator(): AsyncGenerator<ebml.Element> {
-		const blob = this.source;
-		let offset = 0;
-		while (offset < blob.size) {
-			const header = await ebml.Element.readHeader(blob.slice(offset));
-			const dataStart = offset + header.headerSize;
-			const dataEnd = header.dataSize.unknown ?
-				(header.id.id === Cluster.id ? await findClusterEnd(blob, dataStart) : blob.size) :
-				Math.min(dataStart + Number(header.dataSize.bigint), blob.size);
-			const element = new ebml.Element(
-				header.id,
-				header.dataSize,
-				blob.slice(dataStart, dataEnd),
-				this.sourceOffset + offset,
-				this.sourceOffset + dataStart,
-			);
-			offset += element.size;
-			yield element;
-		}
-	}
-
-	public override get children(): AsyncGenerator<ebml.Element> {
-		return this.generator();
 	}
 }
 
@@ -217,22 +151,13 @@ export class SimpleBlock extends ebml.SchemaElement {
 		}
 		const prevSize = this.cachedTrackNumberSize! + this.cachedTimestampSize + this.cachedHeaderFlagsSize;
 		const blob = this.element.data.slice(prevSize);
-		if (lacing === "EBML") {
-			const vint = await Vint.fromBlob(blob);
-			this.cachedFrameCount = vint.number + 1;
-			this.cachedFrameCountSize = vint.size;
-			return this.cachedFrameCount;
-		} else if (lacing === "Xiph" || lacing === "fixed-size") {
-			const u8 = new Uint8Array(await blob.slice(0, 1).arrayBuffer());
-			if (u8.length === 0) {
-				throw new Error("Invalid lacing header");
-			}
-			this.cachedFrameCount = u8[0] + 1;
-			this.cachedFrameCountSize = 1;
-			return this.cachedFrameCount;
-		} else {
-			throw new Error(`Invalid lacing value: ${lacing}`);
+		const u8 = new Uint8Array(await blob.slice(0, 1).arrayBuffer());
+		if (u8.length === 0) {
+			throw new Error("Invalid lacing header");
 		}
+		this.cachedFrameCount = u8[0] + 1;
+		this.cachedFrameCountSize = 1;
+		return this.cachedFrameCount;
 	}
 
 	public get frameCount(): Promise<number> {

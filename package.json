@@ -1,7 +1,7 @@
 {
   "name": "jsmkv",
   "version": "0.1.0",
-  "description": "In-browser Matroska (MKV) player and TypeScript tools for working with Matroska files",
+  "description": "TypeScript tools for Matroska (MKV) and Shaka Player integration",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -51,8 +51,7 @@
     "build:demo": "bun src/demo/build.ts",
     "build:cjs": "tsc -p tsconfig.cjs.json && cp utils/cjs-package.json dist/cjs/package.json",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:polyfill": "bun build --minify src/player/polyfill.ts > dist/polyfill.js",
-    "build": "rm -rf dist && bun run build:cjs && bun run build:esm && bun run build:polyfill && rm -f dist/*.tsbuildinfo",
+    "build": "rm -rf dist && bun run build:cjs && bun run build:esm && rm -f dist/*.tsbuildinfo",
     "npm:publish": "bun run build && npm publish --dry-run"
   },
   "type": "module"

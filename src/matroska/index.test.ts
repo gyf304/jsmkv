@@ -93,34 +93,6 @@ describe("Matroska Tests", () => {
 });
 
 describe("Matroska edge cases", () => {
-	test("parses a headerless file with unknown-size segments and clusters", async () => {
-		const bytes = new Uint8Array([
-			0x18, 0x53, 0x80, 0x67, 0xff, // Segment, unknown size
-			0x1f, 0x43, 0xb6, 0x75, 0xff, // Cluster 1, unknown size
-			0xe7, 0x82, 0x00, 0x00, // Timestamp 0
-			0x1f, 0x43, 0xb6, 0x75, 0xff, // Cluster 2, unknown size
-			0xe7, 0x82, 0x00, 0x01, // Timestamp 1
-		]);
-		const mkv = new matroska.File(new ebml.Stream(new Blob([bytes])));
-		const segments: Segment[] = [];
-		for await (const segment of mkv.segments) {
-			segments.push(segment);
-		}
-		expect(segments).toHaveLength(1);
-
-		const timestamps: number[] = [];
-		for await (const cluster of segments[0].seekClusters(0)) {
-			timestamps.push(await cluster.timestamp);
-		}
-		expect(timestamps).toEqual([0, 1]);
-
-		const allTimestamps: number[] = [];
-		for await (const cluster of segments[0].clusters) {
-			allTimestamps.push(await cluster.timestamp);
-		}
-		expect(allTimestamps).toEqual([0, 1]);
-	});
-
 	test("finds Cues by scanning when SeekHead is missing", async () => {
 		const bytes = new Uint8Array([
 			0x18, 0x53, 0x80, 0x67, 0x85, // Segment, size 5
@@ -161,5 +133,34 @@ describe("Matroska edge cases", () => {
 			}
 		}
 		expect(frames).toEqual([[1, 2, 3], [4, 5]]);
+	});
+
+	test("splits EBML-laced SimpleBlocks into frames", async () => {
+		const bytes = new Uint8Array([
+			0x18, 0x53, 0x80, 0x67, 0x98, // Segment, size 24
+			0x1f, 0x43, 0xb6, 0x75, 0x93, // Cluster, size 19
+			0xe7, 0x82, 0x00, 0x00, // Timestamp 0
+			0xa3, 0x8d, 0x81, 0x00, 0x00, 0x86, // SimpleBlock, track 1, keyframe, EBML lacing
+			0x02, // 3 frames
+			0x83, 0xbe, // frame sizes 3, 2
+			0x01, 0x02, 0x03, // frame 1
+			0x04, 0x05, // frame 2
+			0x06, // frame 3
+		]);
+		const mkv = new matroska.File(new ebml.Stream(new Blob([bytes])));
+		const segments: Segment[] = [];
+		for await (const segment of mkv.segments) {
+			segments.push(segment);
+		}
+
+		const frames: number[][] = [];
+		for await (const cluster of segments[0].seekClusters(0)) {
+			for await (const block of cluster.simpleBlocks) {
+				for await (const frame of block.frames) {
+					frames.push(Array.from(frame));
+				}
+			}
+		}
+		expect(frames).toEqual([[1, 2, 3], [4, 5], [6]]);
 	});
 });

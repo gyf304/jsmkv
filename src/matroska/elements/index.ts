@@ -1,7 +1,7 @@
 import * as ebml from "../../ebml/index.js";
 
 import { Attachments } from "./attachments.js";
-import { Cluster, ClusterAwareStream } from "./cluster.js";
+import { Cluster } from "./cluster.js";
 import { CuePoint, Cues } from "./cues.js";
 import { Info } from "./info.js";
 import { SeekHead } from "./seekhead.js";
@@ -60,10 +60,6 @@ export class Segment extends ebml.SchemaElement {
 
 	constructor(public readonly element: ebml.Element) {
 		super(element);
-	}
-
-	protected override createStream(): ebml.Stream {
-		return new ClusterAwareStream(this.element.data, this.element.dataOffset);
 	}
 
 	public get info() {
@@ -131,7 +127,7 @@ export class Segment extends ebml.SchemaElement {
 
 	public async *seekClusters(clusterPosition: number): AsyncGenerator<Cluster> {
 		const blob = this.element.data.slice(clusterPosition);
-		const stream = new ClusterAwareStream(blob, this.element.dataOffset + clusterPosition);
+		const stream = new ebml.Stream(blob, this.element.dataOffset + clusterPosition);
 		for await (const el of stream.children) {
 			if (el.id.id !== Cluster.id) {
 				break;
