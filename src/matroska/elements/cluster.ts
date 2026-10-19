@@ -35,7 +35,7 @@ export class Cluster extends ebml.SchemaElement {
 	public static readonly level = 1;
 	public static readonly displayName = "Cluster";
 	public static get knownChildren() {
-		return [Timestamp, SimpleBlock];
+		return [Timestamp, SimpleBlock, BlockGroup];
 	}
 
 	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
@@ -48,6 +48,10 @@ export class Cluster extends ebml.SchemaElement {
 
 	public get simpleBlocks() {
 		return this.many(SimpleBlock);
+	}
+
+	public get blockGroups() {
+		return this.many(BlockGroup);
 	}
 }
 
@@ -107,12 +111,12 @@ type Lacing = typeof lacing[number];
  * see: https://www.matroska.org/technical/notes.html#:~:text=SimpleBlock%20Structure
  */
 export class SimpleBlock extends ebml.SchemaElement {
-	public static readonly id = 0xa3;
-	public static readonly level = 2;
-	public static readonly displayName = "SimpleBlock";
+	public static readonly id: number = 0xa3;
+	public static readonly level: number = 2;
+	public static readonly displayName: string = "SimpleBlock";
 	public static readonly leaf = true;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
+	constructor(public readonly element: ebml.Element, public readonly parent: ebml.SchemaElement) {
 		super(element);
 	}
 
@@ -344,5 +348,46 @@ export class SimpleBlock extends ebml.SchemaElement {
 
 	public async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		return [`${curIndent}<${this.name} track="${await this.trackNumber}" timestamp="${await this.timestamp}" framesizes="${JSON.stringify(await this.getFrameSizes())}" />\n`];
+	}
+}
+
+export class BlockGroup extends ebml.SchemaElement {
+	public static readonly id = 0xa0;
+	public static readonly level = 2;
+	public static readonly displayName = "BlockGroup";
+	public static get knownChildren() {
+		return [Block, BlockDuration];
+	}
+
+	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
+		super(element);
+	}
+
+	public get block() {
+		return this.maybeOne(Block);
+	}
+
+	public get duration() {
+		return this.maybeOne(BlockDuration).then(v => v?.value);
+	}
+}
+
+export class Block extends SimpleBlock {
+	public static readonly id = 0xa1;
+	public static readonly level = 3;
+	public static readonly displayName = "Block";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: BlockGroup) {
+		super(element, parent as unknown as Cluster);
+	}
+}
+
+export class BlockDuration extends ebml.UintElement {
+	public static readonly id = 0x9b;
+	public static readonly level = 3;
+	public static readonly displayName = "BlockDuration";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: BlockGroup) {
+		super(element);
 	}
 }

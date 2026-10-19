@@ -31,6 +31,9 @@ export class TrackEntry extends ebml.SchemaElement {
 			FlagLacing,
 			Name,
 			Language,
+			LanguageIETF,
+			FlagDefault,
+			FlagForced,
 			CodecID,
 			CodecPrivate,
 			CodecName,
@@ -66,6 +69,18 @@ export class TrackEntry extends ebml.SchemaElement {
 
 	public get language() {
 		return this.maybeOne(Language).then(v => v === undefined ? undefined : v.value);
+	}
+
+	public get languageIETF() {
+		return this.maybeOne(LanguageIETF).then(v => v === undefined ? undefined : v.value);
+	}
+
+	public get flagDefault() {
+		return this.maybeOne(FlagDefault).then(v => v?.value ?? 1);
+	}
+
+	public get flagForced() {
+		return this.maybeOne(FlagForced).then(v => v?.value ?? 0);
 	}
 
 	public get codecID() {
@@ -198,6 +213,36 @@ export class Language extends ebml.UTF8Element {
 	public static readonly id = 0x22b59c;
 	public static readonly level = 3;
 	public static readonly displayName = "Language";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
+		super(element);
+	}
+}
+
+export class LanguageIETF extends ebml.UTF8Element {
+	public static readonly id = 0x22b59d;
+	public static readonly level = 3;
+	public static readonly displayName = "LanguageIETF";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
+		super(element);
+	}
+}
+
+export class FlagDefault extends ebml.UintElement {
+	public static readonly id = 0x88;
+	public static readonly level = 3;
+	public static readonly displayName = "FlagDefault";
+
+	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
+		super(element);
+	}
+}
+
+export class FlagForced extends ebml.UintElement {
+	public static readonly id = 0x55aa;
+	public static readonly level = 3;
+	public static readonly displayName = "FlagForced";
 
 	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
 		super(element);
