@@ -1,7 +1,7 @@
 {
   "name": "jsmkv",
   "version": "0.1.0",
-  "description": "TypeScript tools for Matroska (MKV) and Shaka Player integration",
+  "description": "TypeScript tools for Matroska (MKV)",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,34 +16,26 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
-    "./transmuxer": {
-      "types": "./dist/esm/transmuxer/index.d.ts",
-      "import": "./dist/esm/transmuxer/index.js",
-      "require": "./dist/cjs/transmuxer/index.js"
+    "./player": {
+      "types": "./dist/esm/player/index.d.ts",
+      "import": "./dist/esm/player/index.js",
+      "require": "./dist/cjs/player/index.js"
     },
-    "./shaka": {
-      "types": "./dist/esm/shaka/index.d.ts",
-      "import": "./dist/esm/shaka/index.js",
-      "require": "./dist/cjs/shaka/index.js"
+    "./remuxer": {
+      "types": "./dist/esm/remuxer/index.d.ts",
+      "import": "./dist/esm/remuxer/index.js",
+      "require": "./dist/cjs/remuxer/index.js"
     }
   },
   "dependencies": {
-    "lru-cache": "^10.2.2"
-  },
-  "peerDependencies": {
-    "shaka-player": "^5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "shaka-player": {
-      "optional": true
-    }
+    "lru-cache": "^10.2.2",
+    "media-tracks": "^0.3.5"
   },
   "files": [ "dist" ],
   "devDependencies": {
     "@types/web": "^0.0.126",
     "bun-types": "latest",
     "npm": "^10.8.1",
-    "shaka-player": "^5.3.0",
     "typescript": "^5.4.5"
   },
   "scripts": {

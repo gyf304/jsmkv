@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>MKV MSE Player Demo</title>
+		<style>
+			html, body {
+				margin: 0;
+				padding: 0;
+				width: 100%;
+				height: 100%;
+				background-color: black;
+				font-family: sans-serif;
+			}
+			body {
+				display: flex;
+				flex-direction: column;
+			}
+			#controls {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: center;
+				gap: 8px;
+				padding: 8px;
+				color: white;
+				background-color: #111;
+			}
+			#url {
+				width: min(60vw, 640px);
+			}
+			.github-link {
+				display: flex;
+				margin-left: auto;
+			}
+			.github-logo {
+				width: 24px;
+				height: 24px;
+				filter: invert(1);
+			}
+			video {
+				flex: 1;
+				min-height: 0;
+				width: 100%;
+				object-fit: contain;
+			}
+			#info {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-end;
+				gap: 8px;
+				padding: 4px 8px;
+				color: #ccc;
+				background-color: #111;
+				font-size: 12px;
+				white-space: pre-wrap;
+			}
+			#status {
+				flex: 1;
+				min-width: 0;
+			}
+			#status:empty {
+				display: none;
+			}
+			.attribution {
+				color: #ccc;
+				text-align: right;
+				text-decoration: none;
+			}
+			.attribution a {
+				color: #ccc;
+			}
+		</style>
+	</head>
+	<body>
+		<header id="controls">
+			<input id="url" type="url" placeholder="MKV URL" />
+			<button id="load">Load</button>
+			<input id="file" type="file" accept=".mkv,video/x-matroska" />
+			<select id="audioTracks" hidden></select>
+			<select id="videoTracks" hidden></select>
+			<select id="textTracks" hidden></select>
+			<a class="github-link" href="https://github.com/gyf304/jsmkv" target="_blank">
+				<img class="github-logo" src="https://unpkg.com/simple-icons@v12/icons/github.svg" alt="GitHub">
+			</a>
+		</header>
+		<video id="video" controls playsinline></video>
+		<footer id="info">
+			<div id="status"></div>
+			<a class="attribution" href="https://cloud.blender.org/spring" target="_blank">
+				&copy; Blender Foundation | cloud.blender.org/spring
+				<br>
+				Licensed under CC-BY 4.0
+			</a>
+		</footer>
+		<script type="module" src="index.ts"></script>
+	</body>
+</html>

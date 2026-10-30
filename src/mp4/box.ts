@@ -365,10 +365,9 @@ interface MP4A {
 	channelCount: number;
 }
 
-export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children: ArrayBuilderPart[]): ArrayBuilder {
-	// see https://xhelmboyx.tripod.com/formats/mp4-layout.txt#:~:text=mp4a
-	return box(
-		"mp4a",
+function audioSampleEntry(type: string) {
+	return ({ sampleRate, sampleSize, channelCount }: MP4A, ...children: ArrayBuilderPart[]) => box(
+		type,
 		zeros(6),
 		u16(1), // data reference index
 		u16(0), // audio encoding version
@@ -381,6 +380,43 @@ export function mp4a({ sampleRate, sampleSize, channelCount }: MP4A, ...children
 		u16(sampleRate), u16(0), // sample rate (16.16 fixed-point)
 		...children,
 	);
+}
+
+export const mp4a = audioSampleEntry("mp4a");
+export const opus = audioSampleEntry("Opus");
+export const flac = audioSampleEntry("fLaC");
+
+export interface DOPS {
+	channels: number;
+	preSkip: number;
+	inputSampleRate: number;
+	outputGain: number;
+	mappingFamily: number;
+	mapping?: Uint8Array;
+}
+
+export function dOps({
+	channels,
+	preSkip,
+	inputSampleRate,
+	outputGain,
+	mappingFamily,
+	mapping,
+}: DOPS): ArrayBuilder {
+	return box(
+		"dOps",
+		[0], // version
+		[channels],
+		u16(preSkip),
+		u32(inputSampleRate),
+		u16(outputGain & 0xffff),
+		[mappingFamily],
+		mapping ?? new Uint8Array(0),
+	);
+}
+
+export function dfLa(data: ArrayBuilderPart): ArrayBuilder {
+	return box("dfLa", verflag(0, 0), data);
 }
 
 interface ESDS {

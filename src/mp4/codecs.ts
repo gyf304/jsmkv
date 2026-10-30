@@ -27,20 +27,3 @@ export function hevcMimeCodec(cpd: ArrayBuffer) {
 	const gpConstraintFlags = hexString(cpd.slice(6, 12)).toLowerCase().replace(/(00)*$/, "");
 	return `hvc1.${gpSpace}${gpIDC}.${gpCompatibility}.${gpTierFlag}${gpLevelIdc}.${gpConstraintFlags}`;
 }
-
-export function videoMimeCodec(codecID: string, codecPrivate: ArrayBuffer): string | undefined {
-	if (codecID === "V_MPEG4/ISO/AVC") {
-		return `avc1.${hexString(codecPrivate.slice(1, 4)).toLowerCase()}`;
-	}
-	if (codecID === "V_MPEGH/ISO/HEVC") {
-		return hevcMimeCodec(codecPrivate);
-	}
-	return undefined;
-}
-
-export function audioMimeCodec(codecID: string): string | undefined {
-	if (codecID === "A_AAC") {
-		return "mp4a.40.2";
-	}
-	return undefined;
-}
