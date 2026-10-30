@@ -6,7 +6,4 @@ export class Chapters extends ebml.SchemaElement {
 	public static readonly level = 1;
 	public static readonly displayName = "Chapters";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 }

@@ -48,15 +48,6 @@ export async function readSeekPoints(
 	};
 }
 
-export async function firstClusterPosition(
-	segment: mkve.Segment,
-): Promise<number | undefined> {
-	for await (const cluster of segment.clusters) {
-		return cluster.element.offset - segment.element.dataOffset;
-	}
-	return undefined;
-}
-
 function toPoints(positions: ReadonlyMap<number, number>): SeekPoint[] {
 	return [...positions.entries()]
 		.map(([position, time]) => ({ time, position }))

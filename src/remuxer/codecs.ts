@@ -21,7 +21,7 @@ export function audioMimeCodec(codecID: string): string | undefined {
 		return "opus";
 	}
 	if (codecID === "A_FLAC") {
-		return "flac";
+		return "fLaC";
 	}
 	return undefined;
 }

@@ -28,9 +28,18 @@ export class Vint {
 		return new Vint(bytes.slice(0, 1 + zeros))
 	}
 
-	public static async fromBlob(blob: BlobLike): Promise<Vint> {
+	public static async fromBlobLike(blob: BlobLike): Promise<Vint> {
 		const buffer = await blob.slice(0, 8).arrayBuffer();
 		return Vint.fromBytes(new Uint8Array(buffer));
+	}
+
+	public static fromId(id: number): Vint {
+		const bytes: number[] = [];
+		while (id > 0) {
+			bytes.unshift(id & 0xff);
+			id = Math.floor(id / 256);
+		}
+		return new Vint(new Uint8Array(bytes));
 	}
 
 	public getBytes(): Uint8Array {

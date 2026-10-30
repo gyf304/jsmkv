@@ -37,7 +37,7 @@ export class TextPlayerTrack implements Track<TextTrack> {
 	public async add(cluster: mkve.Cluster): Promise<void> {
 		const trackNumber = await this.entry.trackNumber;
 		const contentEncodings = await this.entry.maybeOne(mkve.ContentEncodings);
-		const info = await this.entry.parent.parent.info;
+		const info = await this.entry.segment.info;
 		const blocks: TextBlock[] = [];
 		const clusterTimestamp = await cluster.timestamp;
 		for await (const child of cluster.children) {

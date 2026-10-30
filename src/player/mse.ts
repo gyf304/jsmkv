@@ -1,6 +1,11 @@
 import type { AudioTrack, VideoTrack } from "media-tracks";
 import * as mkve from "../matroska/elements/index.js";
-import { MatroskaTrackToFMP4Remuxer } from "../remuxer/index.js";
+import {
+	MatroskaTrackRemuxer,
+	MatroskaTrackToFMP4Remuxer,
+	type Remuxer,
+} from "../remuxer/index.js";
+import { isMediaSourceTypeSupported } from "./media.js";
 import type { PlayerMediaTrack, Track } from "./types.js";
 
 export class MseTrack implements Track<VideoTrack | AudioTrack> {
@@ -12,17 +17,31 @@ export class MseTrack implements Track<VideoTrack | AudioTrack> {
 		{ codecType: "audio", codecId: "A_FLAC" },
 	] as const;
 
-	public static mimeType(
+	public static async mimeType(
 		entry: mkve.TrackEntry,
 	): Promise<string | undefined> {
-		return MatroskaTrackToFMP4Remuxer.mimeType(entry);
+		const mp4 = await MatroskaTrackToFMP4Remuxer.mimeType(entry);
+		if (mp4 !== undefined && isMediaSourceTypeSupported(mp4)) {
+			return mp4;
+		}
+		const webm = await MatroskaTrackRemuxer.webmMimeType(entry);
+		if (webm !== undefined && isMediaSourceTypeSupported(webm)) {
+			return webm;
+		}
+		return mp4;
 	}
 
 	public static async create(
 		entry: mkve.TrackEntry,
 		sink: VideoTrack | AudioTrack,
 	): Promise<MseTrack> {
-		const remuxer = await MatroskaTrackToFMP4Remuxer.create(entry);
+		const mimeType = await MseTrack.mimeType(entry);
+		if (mimeType === undefined) {
+			throw new Error("Unsupported media track");
+		}
+		const remuxer = mimeType.includes("webm") ?
+			await MatroskaTrackRemuxer.create(entry, mimeType, "webm") :
+			await MatroskaTrackToFMP4Remuxer.create(entry);
 		if (remuxer === undefined) {
 			throw new Error("Unsupported media track");
 		}
@@ -38,7 +57,7 @@ export class MseTrack implements Track<VideoTrack | AudioTrack> {
 	private initialized = false;
 
 	private constructor(
-		private readonly remuxer: MatroskaTrackToFMP4Remuxer,
+		private readonly remuxer: Remuxer,
 		public readonly sink: VideoTrack | AudioTrack,
 		private readonly sourceBuffer: SourceBuffer,
 		private readonly entry: mkve.TrackEntry,
@@ -70,7 +89,7 @@ export class MseTrack implements Track<VideoTrack | AudioTrack> {
 		return this.enqueue(async () => {
 			const duration = await this.duration();
 			if (end >= duration) {
-				this.remuxer.reset();
+				this.remuxer.reset?.();
 			}
 			await this.clear(start, end);
 		});
@@ -89,7 +108,7 @@ export class MseTrack implements Track<VideoTrack | AudioTrack> {
 	}
 
 	private async duration(): Promise<number> {
-		const info = await this.entry.parent.parent.info;
+		const info = await this.entry.segment.info;
 		return (await info.duration) *
 			(await info.timestampScale) / 1e9;
 	}

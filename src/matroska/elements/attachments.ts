@@ -9,9 +9,6 @@ export class Attachments extends ebml.SchemaElement {
 		return [AttachedFile];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get attachedFiles(): AsyncGenerator<AttachedFile> {
 		return this.many(AttachedFile);
@@ -32,9 +29,6 @@ export class AttachedFile extends ebml.SchemaElement {
 		];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Attachments) {
-		super(element);
-	}
 
 	public get fileDescription(): Promise<string | undefined> {
 		return this.maybeOne(FileDescription).then(v => v?.value);
@@ -62,9 +56,6 @@ export class FileDescription extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "FileDescription";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: AttachedFile) {
-		super(element);
-	}
 }
 
 export class FileName extends ebml.UTF8Element {
@@ -72,9 +63,6 @@ export class FileName extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "FileName";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: AttachedFile) {
-		super(element);
-	}
 }
 
 export class FileMediaType extends ebml.UTF8Element {
@@ -82,9 +70,6 @@ export class FileMediaType extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "FileMediaType";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: AttachedFile) {
-		super(element);
-	}
 }
 
 export class FileData extends ebml.BytesElement {
@@ -92,9 +77,6 @@ export class FileData extends ebml.BytesElement {
 	public static readonly level = 3;
 	public static readonly displayName = "FileData";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: AttachedFile) {
-		super(element);
-	}
 }
 
 export class FileUID extends ebml.UintElement {
@@ -102,7 +84,4 @@ export class FileUID extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "FileUID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: AttachedFile) {
-		super(element);
-	}
 }

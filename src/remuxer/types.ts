@@ -7,4 +7,6 @@ export interface Remuxer {
 		segments: AsyncIterable<ArrayBuffer>,
 		signal?: AbortSignal,
 	): AsyncIterable<ArrayBuffer>;
+
+	reset?(): void;
 }

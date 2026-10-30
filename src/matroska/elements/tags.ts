@@ -10,9 +10,6 @@ export class Tags extends ebml.SchemaElement {
 		return [Tag];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 }
 
 export class Tag extends ebml.SchemaElement {
@@ -23,9 +20,6 @@ export class Tag extends ebml.SchemaElement {
 		return [Targets, SimpleTag];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Tags) {
-		super(element);
-	}
 }
 
 export class Targets extends ebml.SchemaElement {
@@ -36,9 +30,6 @@ export class Targets extends ebml.SchemaElement {
 		return [TargetTypeValue, TargetType, TagTrackUID];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Tag) {
-		super(element);
-	}
 }
 
 export class TargetTypeValue extends ebml.UintElement {
@@ -46,9 +37,6 @@ export class TargetTypeValue extends ebml.UintElement {
 	public static readonly level = 4;
 	public static readonly displayName = "TargetTypeValue";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Targets) {
-		super(element);
-	}
 }
 
 export class TargetType extends ebml.UTF8Element {
@@ -56,9 +44,6 @@ export class TargetType extends ebml.UTF8Element {
 	public static readonly level = 4;
 	public static readonly displayName = "TargetType";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Targets) {
-		super(element);
-	}
 }
 
 export class SimpleTag extends ebml.SchemaElement {
@@ -69,9 +54,6 @@ export class SimpleTag extends ebml.SchemaElement {
 		return [TagName, TagLanguage, TagString, TagLanguage];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Tag) {
-		super(element);
-	}
 }
 
 export class TagName extends ebml.UTF8Element {
@@ -79,9 +61,6 @@ export class TagName extends ebml.UTF8Element {
 	public static readonly level = 4;
 	public static readonly displayName = "TagName";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: SimpleTag) {
-		super(element);
-	}
 }
 
 export class TagLanguage extends ebml.UTF8Element {
@@ -89,9 +68,6 @@ export class TagLanguage extends ebml.UTF8Element {
 	public static readonly level = 4;
 	public static readonly displayName = "TagLanguage";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: SimpleTag) {
-		super(element);
-	}
 }
 
 export class TagString extends ebml.UTF8Element {
@@ -99,9 +75,6 @@ export class TagString extends ebml.UTF8Element {
 	public static readonly level = 4;
 	public static readonly displayName = "TagString";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: SimpleTag) {
-		super(element);
-	}
 }
 
 export class TagTrackUID extends ebml.UintElement {
@@ -109,7 +82,4 @@ export class TagTrackUID extends ebml.UintElement {
 	public static readonly level = 4;
 	public static readonly displayName = "TagTrackUID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Targets) {
-		super(element);
-	}
 }

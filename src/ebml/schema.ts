@@ -1,9 +1,21 @@
+import { ConcatBlobLike } from "../bloblike/concat.js";
+import type { BlobLike } from "../bloblike/base.js";
 import { Vint } from "../vint/index.js";
 import { Element, Stream } from "./base.js";
 
 type New<T> = T extends new (...args: any) => infer R ? R : never;
 
-type SchemaElementConstructor = typeof SchemaElement;
+type SchemaElementConstructor = {
+	readonly id: number;
+	readonly level?: number;
+	readonly displayName: string;
+	readonly knownChildren?: readonly SchemaElementConstructor[];
+	readonly mandatory?: boolean;
+	readonly multiple?: boolean;
+	readonly leaf?: boolean;
+	new (...args: any[]): SchemaElement;
+	parse(element: Element, parent?: SchemaElement): SchemaElement;
+};
 export abstract class SchemaElement {
 	// static members
 	public static readonly id: number;
@@ -20,7 +32,40 @@ export abstract class SchemaElement {
 
 	private cache: Map<string, unknown> = new Map();
 
-	constructor(public readonly element: Element, public readonly parent?: SchemaElement) {
+	public readonly element: Element;
+	public readonly parent?: SchemaElement;
+
+	constructor(element: Element, parent?: SchemaElement);
+	constructor(...children: SchemaElement[]);
+	constructor(
+		children: readonly SchemaElement[],
+		options?: { unknownSize?: boolean },
+	);
+	constructor(
+		...args: [Element, SchemaElement?] |
+			SchemaElement[] |
+			[readonly SchemaElement[], { unknownSize?: boolean }?]
+	) {
+		const first = args[0];
+		if (first instanceof Element) {
+			this.element = first;
+			this.parent = args[1] as SchemaElement | undefined;
+		} else {
+			const children = Array.isArray(first) ?
+				first as readonly SchemaElement[] :
+				args as SchemaElement[];
+			const options = Array.isArray(first) ?
+				args[1] as { unknownSize?: boolean } | undefined :
+				undefined;
+			const id = (new.target as unknown as typeof SchemaElement).id;
+			const data = new ConcatBlobLike(
+				children.map((child) => child.toBlobLike()),
+			);
+			this.element = options?.unknownSize ?
+				Element.createUnknownSize(id, data) :
+				Element.create(id, data);
+			this.parent = undefined;
+		}
 		this._constructor = this.constructor as typeof SchemaElement;
 
 		const expectedID: number = (this as any).constructor.id;
@@ -28,14 +73,26 @@ export abstract class SchemaElement {
 		if (this.element.id.id !== expectedID && expectedID !== 0) {
 			throw new Error(`Expected ID ${(this as any).constructor.id}`);
 		}
-		if (parent !== undefined) {
-			const parentName = parent._constructor.displayName;
+		if (this.parent !== undefined) {
+			const parentName = this.parent._constructor.displayName;
 			const thisLevel = (this as any).constructor.level;
-			const parentLevel = (parent as any).constructor.level;
+			const parentLevel = (this.parent as any).constructor.level;
 			if (thisLevel !== undefined && thisLevel !== parentLevel + 1) {
 				throw new Error(`${thisName} (level ${thisLevel}) cannot be a child of ${parentName} (level ${parentLevel})`);
 			}
 		}
+	}
+
+	public static parse<T extends SchemaElementConstructor>(
+		this: T,
+		element: Element,
+		parent?: SchemaElement,
+	): InstanceType<T> {
+		return new (this as any)(element, parent);
+	}
+
+	public toBlobLike(): BlobLike {
+		return this.element.toBlobLike();
 	}
 
 	public async cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -128,15 +185,15 @@ export abstract class SchemaElement {
 		return s.children;
 	}
 
-	public maybeOne<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
+	public maybeOne<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
 		return this.stream.maybeOne(cls, options);
 	}
 
-	public one<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T>> {
+	public one<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): Promise<New<T>> {
 		return this.stream.one(cls, options);
 	}
 
-	public many<T extends typeof SchemaElement>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
+	public many<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
 		return this.stream.many(cls, options);
 	}
 
@@ -182,10 +239,6 @@ export class UnknownElement extends SchemaElement {
 	public static readonly level = undefined;
 	public static readonly displayName = "Unknown";
 
-	constructor(public readonly element: Element, public readonly parent?: SchemaElement) {
-		super(element, parent);
-	}
-
 	public override async toXMLParts(maxLevel?: number, indent: number | string = "\t", curIndent: string = ""): Promise<string[]> {
 		return [`${curIndent}${this.toString()}\n`];
 	}
@@ -197,6 +250,17 @@ export class UnknownElement extends SchemaElement {
 
 export abstract class UTF8Element extends SchemaElement {
 	public static readonly leaf = true;
+
+	constructor(value: string, parent?: SchemaElement);
+	constructor(element: Element, parent?: SchemaElement);
+	constructor(value: string | Element, parent?: SchemaElement) {
+		if (value instanceof Element) {
+			super(value, parent);
+		} else {
+			const id = (new.target as unknown as typeof SchemaElement).id;
+			super(Element.create(id, new Blob([new TextEncoder().encode(value)])));
+		}
+	}
 
 	private cachedValue?: string;
 
@@ -223,6 +287,17 @@ export abstract class UTF8Element extends SchemaElement {
 
 export abstract class UintElement extends SchemaElement {
 	public static readonly leaf = true;
+
+	constructor(value: number, parent?: SchemaElement);
+	constructor(element: Element, parent?: SchemaElement);
+	constructor(value: number | Element, parent?: SchemaElement) {
+		if (value instanceof Element) {
+			super(value, parent);
+		} else {
+			const id = (new.target as unknown as typeof SchemaElement).id;
+			super(Element.create(id, new Blob([uintBytes(value)])));
+		}
+	}
 
 	private cachedValue?: bigint;
 
@@ -256,6 +331,17 @@ export abstract class UintElement extends SchemaElement {
 
 export abstract class FloatElement extends SchemaElement {
 	public static readonly leaf = true;
+
+	constructor(value: number, parent?: SchemaElement);
+	constructor(element: Element, parent?: SchemaElement);
+	constructor(value: number | Element, parent?: SchemaElement) {
+		if (value instanceof Element) {
+			super(value, parent);
+		} else {
+			const id = (new.target as unknown as typeof SchemaElement).id;
+			super(Element.create(id, new Blob([floatBytes(value)])));
+		}
+	}
 
 	private cachedValue?: number;
 
@@ -319,6 +405,17 @@ export class Crc32Element extends SchemaElement {
 
 export abstract class BytesElement extends SchemaElement {
 	public static readonly leaf = true;
+
+	constructor(value: BlobLike, parent?: SchemaElement);
+	constructor(element: Element, parent?: SchemaElement);
+	constructor(value: BlobLike | Element, parent?: SchemaElement) {
+		if (value instanceof Element) {
+			super(value, parent);
+		} else {
+			const id = (new.target as unknown as typeof SchemaElement).id;
+			super(Element.create(id, value));
+		}
+	}
 
 	private cachedValue?: ArrayBuffer;
 
@@ -447,7 +544,7 @@ export abstract class SchemaStream {
 
 			const childConstructor = this.knownChildrenMap.get(id);
 			if (childConstructor !== undefined) {
-				yield new (childConstructor as unknown as any)(child, this as any); // TODO: Fix this
+				yield childConstructor.parse(child, this.parent);
 			} else if ( id === VoidElement.id ) {
 				yield new VoidElement(child, this.parent);
 			} else if ( id === Crc32Element.id ) {
@@ -462,21 +559,21 @@ export abstract class SchemaStream {
 		return this.childrenGenerator();
 	}
 
-	public async maybeOne<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
+	public async maybeOne<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): Promise<New<T> | undefined> {
 		for await (const child of this.stream.children) {
 			if (child.id.id === options?.before?.id) {
 				break;
 			}
 			if (child.id.id === cls.id) {
-				if (cls === SchemaElement) {
+				if ((cls as unknown) === SchemaElement) {
 					throw new Error("Cannot use SchemaElement as a type");
 				}
-				return new (cls as unknown as any)(child, this.parent);
+				return cls.parse(child, this.parent) as New<T>;
 			}
 		}
 	}
 
-	public async one<T extends typeof SchemaElement>(cls: T, options?: FindOptions): Promise<New<T>> {
+	public async one<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): Promise<New<T>> {
 		const result = await this.maybeOne(cls, options);
 		if (result === undefined) {
 			throw new Error(`Expected ${cls.displayName}`);
@@ -484,13 +581,13 @@ export abstract class SchemaStream {
 		return result;
 	}
 
-	public async *many<T extends typeof SchemaElement>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
+	public async *many<T extends SchemaElementConstructor>(cls: T, options?: FindOptions): AsyncGenerator<New<T>> {
 		for await (const child of this.stream.children) {
 			if (child.id.id === cls.id) {
-				if (cls === SchemaElement) {
+				if ((cls as unknown) === SchemaElement) {
 					throw new Error("Cannot use SchemaElement as a type");
 				}
-				yield new (cls as unknown as any)(child, this.parent);
+				yield cls.parse(child, this.parent) as New<T>;
 			} else if (child.id.id === options?.before?.id) {
 				break;
 			}
@@ -514,4 +611,22 @@ class ChildSchemaStream extends SchemaStream {
 	public get knownChildrenMap(): Map<number, SchemaElementConstructor> {
 		return this.parent!.knownChildrenMap;
 	}
+}
+
+function uintBytes(value: number): Uint8Array {
+	if (value === 0) {
+		return new Uint8Array([0]);
+	}
+	const bytes: number[] = [];
+	while (value > 0) {
+		bytes.unshift(value & 0xff);
+		value = Math.floor(value / 256);
+	}
+	return new Uint8Array(bytes);
+}
+
+function floatBytes(value: number): Uint8Array {
+	const buffer = new ArrayBuffer(8);
+	new DataView(buffer).setFloat64(0, value, false);
+	return new Uint8Array(buffer);
 }

@@ -16,6 +16,7 @@ export * from "./info.js";
 export * from "./seekhead.js";
 export * from "./tags.js";
 export * from "./tracks.js";
+export { EBMLHead } from "../../ebml/header.js";
 
 /*
 +-------------+
@@ -41,26 +42,12 @@ export * from "./tracks.js";
 See https://www.matroska.org/technical/elements.html for details.
 */
 
-export class EBMLHead extends ebml.SchemaElement {
-	public static readonly id = 0x1a45dfa3;
-	public static readonly level = 0;
-	public static readonly displayName = "EBMLHead";
-	public static readonly leaf = true;
-
-	constructor(public readonly element: ebml.Element) {
-		super(element);
-	}
-}
-
 export class Segment extends ebml.SchemaElement {
 	public static readonly id = 0x18538067;
 	public static readonly level = 0;
 	public static readonly displayName = "Segment";
 	public static readonly knownChildren = [SeekHead, Info, Tracks, Attachments, Cluster, Cues, Tags];
 
-	constructor(public readonly element: ebml.Element) {
-		super(element);
-	}
 
 	public get info() {
 		return this.one(Info, { before: Cluster });
@@ -118,21 +105,5 @@ export class Segment extends ebml.SchemaElement {
 		return this.many(Cluster);
 	}
 
-	public async seekCluster(clusterPosition: number): Promise<Cluster> {
-		for await (const cluster of this.seekClusters(clusterPosition)) {
-			return cluster;
-		}
-		throw new Error("Cluster not found");
-	}
 
-	public async *seekClusters(clusterPosition: number): AsyncGenerator<Cluster> {
-		const blob = this.element.data.slice(clusterPosition);
-		const stream = new ebml.Stream(blob, this.element.dataOffset + clusterPosition);
-		for await (const el of stream.children) {
-			if (el.id.id !== Cluster.id) {
-				break;
-			}
-			yield new Cluster(el, this);
-		}
-	}
 }

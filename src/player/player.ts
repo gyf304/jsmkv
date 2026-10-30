@@ -1,9 +1,10 @@
 import { MediaTracksMixin } from "media-tracks";
+import type { BlobLike } from "../bloblike/index.js";
 import type { AudioTrack, VideoTrack } from "media-tracks";
+import * as ebml from "../ebml/index.js";
 import * as mkve from "../matroska/elements/index.js";
 import { isMediaSourceTypeSupported, MediaSourceHandle } from "./media.js";
 import {
-	firstClusterPosition,
 	readSeekPoints,
 	type SeekIndex,
 	type SeekPoint,
@@ -19,7 +20,7 @@ import type {
 interface PlaybackSource {
 	readonly segment: mkve.Segment;
 	readonly timestampScale: number;
-	readonly startPosition: number;
+	readonly data: BlobLike;
 	readonly seekIndex: SeekIndex;
 	position: number;
 }
@@ -146,15 +147,11 @@ export class Player {
 				throw new Error("No supported tracks found");
 			}
 
-			const startPosition = await firstClusterPosition(segment);
-			if (startPosition === undefined) {
-				throw new Error("No clusters found");
-			}
 			this.source = {
 				segment,
 				timestampScale,
-				startPosition,
-				position: startPosition,
+				data: segment.element.data,
+				position: 0,
 				seekIndex: await readSeekPoints(segment, timestampScale),
 			};
 
@@ -284,9 +281,19 @@ export class Player {
 		const ahead = this.options.maxBufferAhead ?? 30;
 		const time = this.element.currentTime;
 		const scale = source.timestampScale / 1e9;
-		for await (const cluster of source.segment.seekClusters(source.position)) {
+		let position = source.position;
+		const stream = new ebml.Stream(source.data.slice(position));
+		for await (const element of stream.children) {
+			const elementPosition = position;
+			position += element.size;
+			if (element.id.id !== mkve.Cluster.id) {
+				source.position = position;
+				continue;
+			}
+			const cluster = new mkve.Cluster(element);
 			const startTime = (await cluster.timestamp) * scale;
 			if (startTime >= time + ahead) {
+				source.position = elementPosition;
 				break;
 			}
 			await Promise.all(this.trackList.map((track) =>
@@ -294,9 +301,7 @@ export class Player {
 			if (version !== this.seekState.version || this.destroyed) {
 				return;
 			}
-			source.position = cluster.element.offset -
-				source.segment.element.dataOffset +
-				cluster.element.size;
+			source.position = position;
 		}
 
 		const behind = this.options.maxBufferBehind ?? 30;
@@ -332,7 +337,7 @@ export class Player {
 			if (version !== this.seekState.version || this.destroyed) {
 				return;
 			}
-			source.position = point?.position ?? source.startPosition;
+			source.position = point?.position ?? 0;
 			await this.fill();
 			if (version === this.seekState.version && !this.destroyed) {
 				this.settleSeek();

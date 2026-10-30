@@ -12,5 +12,6 @@ P.P.S. If someone can recommend me a good MP4 validator, I would be very gratefu
 
 ## Limitations
 - The player supports H.264/H.265 video, AAC/FLAC/Opus audio, and SRT/VTT subtitles.
+- Opus uses WebM encapsulation on browsers that do not support Opus in MP4.
 - The library does not support all Matroska features. For example, videos not
   using SimpleBlock elements will not play.

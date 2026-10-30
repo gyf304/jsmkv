@@ -9,9 +9,6 @@ export class Info extends ebml.SchemaElement {
 		return [TimestampScale, MuxingApp, WritingApp, SegmentUUID, Duration];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get timestampScale(): Promise<number> {
 		return this.one(TimestampScale).then(e => e.value);
@@ -27,9 +24,6 @@ export class TimestampScale extends ebml.UintElement {
 	public static readonly level = 2;
 	public static readonly displayName = "TimestampScale";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
-		super(element);
-	}
 }
 
 export class MuxingApp extends ebml.UTF8Element {
@@ -37,9 +31,6 @@ export class MuxingApp extends ebml.UTF8Element {
 	public static readonly level = 2;
 	public static readonly displayName = "MuxingApp";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
-		super(element);
-	}
 }
 
 export class WritingApp extends ebml.UTF8Element {
@@ -47,9 +38,6 @@ export class WritingApp extends ebml.UTF8Element {
 	public static readonly level = 2;
 	public static readonly displayName = "WritingApp";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
-		super(element);
-	}
 }
 
 export class SegmentUUID extends ebml.BytesElement {
@@ -57,9 +45,6 @@ export class SegmentUUID extends ebml.BytesElement {
 	public static readonly level = 2;
 	public static readonly displayName = "SegmentUUID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
-		super(element);
-	}
 }
 
 export class Duration extends ebml.FloatElement {
@@ -67,7 +52,4 @@ export class Duration extends ebml.FloatElement {
 	public static readonly level = 2;
 	public static readonly displayName = "Duration";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Info) {
-		super(element);
-	}
 }

@@ -10,9 +10,6 @@ export class Cluster extends ebml.SchemaElement {
 		return [Timestamp, SimpleBlock, BlockGroup];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get timestamp() {
 		return this.one(Timestamp).then(e => e.value);
@@ -32,9 +29,6 @@ export class Timestamp extends ebml.UintElement {
 	public static readonly level = 2;
 	public static readonly displayName = "Timestamp";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
-		super(element);
-	}
 }
 
 const lacing = ["none", "Xiph", "fixed-size", "EBML"] as const;
@@ -50,9 +44,6 @@ export class SimpleBlock extends ebml.SchemaElement {
 	public static readonly displayName: string = "SimpleBlock";
 	public static readonly leaf = true;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ebml.SchemaElement) {
-		super(element);
-	}
 
 	private cachedTrackNumber?: number;
 	private cachedTrackNumberSize?: number;
@@ -61,7 +52,7 @@ export class SimpleBlock extends ebml.SchemaElement {
 			return this.cachedTrackNumber;
 		}
 		const blob = await this.element.data;
-		const vint = await Vint.fromBlob(blob);
+		const vint = await Vint.fromBlobLike(blob);
 		this.cachedTrackNumber = vint.number;
 		this.cachedTrackNumberSize = vint.size;
 		return this.cachedTrackNumber;
@@ -224,13 +215,13 @@ export class SimpleBlock extends ebml.SchemaElement {
 			let offset = 0;
 			let sizeSum = 0;
 			// first frame
-			const firstVint = await Vint.fromBlob(blob.slice(offset));
+			const firstVint = await Vint.fromBlobLike(blob.slice(offset));
 			sizes.push(firstVint.number);
 			offset += firstVint.size;
 			sizeSum += firstVint.number;
 			for (let i = 1; i < frameCount - 1; i++) {
 				// other frames
-				const vint = await Vint.fromBlob(blob.slice(offset));
+				const vint = await Vint.fromBlobLike(blob.slice(offset));
 				const vintNumber = vint.number;
 				const signed = vintNumber - ((2 ** (7 * vint.size - 1)) - 1);
 				const size = sizes[i - 1] + signed;
@@ -284,9 +275,6 @@ export class BlockGroup extends ebml.SchemaElement {
 		return [Block, BlockDuration];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Cluster) {
-		super(element);
-	}
 
 	public get block() {
 		return this.maybeOne(Block);
@@ -302,9 +290,6 @@ export class Block extends SimpleBlock {
 	public static readonly level = 3;
 	public static readonly displayName = "Block";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: BlockGroup) {
-		super(element, parent as unknown as Cluster);
-	}
 }
 
 export class BlockDuration extends ebml.UintElement {
@@ -312,7 +297,4 @@ export class BlockDuration extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "BlockDuration";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: BlockGroup) {
-		super(element);
-	}
 }

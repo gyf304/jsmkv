@@ -1,6 +1,5 @@
 import type { Segment } from "./index.js";
 import * as ebml from "../../ebml/index.js";
-import { Cluster } from "./cluster.js";
 
 export class Cues extends ebml.SchemaElement {
 	public static readonly id = 0x1c53bb6b;
@@ -10,9 +9,6 @@ export class Cues extends ebml.SchemaElement {
 		return [CuePoint];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get cuePoints(): AsyncGenerator<CuePoint> {
 		return this.many(CuePoint);
@@ -27,9 +23,6 @@ export class CuePoint extends ebml.SchemaElement {
 		return [CueTime, CueTrackPositions];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Cues) {
-		super(element);
-	}
 
 	public get cueTime() {
 		return this.one(CueTime).then(v => v.value);
@@ -45,9 +38,6 @@ export class CueTime extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "CueTime";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: CuePoint) {
-		super(element);
-	}
 }
 
 export class CueTrackPositions extends ebml.SchemaElement {
@@ -58,9 +48,6 @@ export class CueTrackPositions extends ebml.SchemaElement {
 		return [CueTrack, CueClusterPosition, CueRelativePosition, CueDuration];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: CuePoint) {
-		super(element);
-	}
 	public get cueTrack() {
 		return this.one(CueTrack).then(v => v.value);
 	}
@@ -76,31 +63,12 @@ export class CueTrack extends ebml.UintElement {
 	public static readonly displayName = "CueTrack";
 
 
-	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
-		super(element);
-	}
 }
 
 export class CueClusterPosition extends ebml.UintElement {
 	public static readonly id = 0xf1;
 	public static readonly level = 4;
 	public static readonly displayName = "CueClusterPosition";
-
-	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
-		super(element);
-	}
-
-	private async getReferencedElement(): Promise<Cluster> {
-		const position = await this.value;
-		const segment = this.parent.parent.parent.parent;
-		const blob = segment.element.data.slice(position);
-		const el = await ebml.Element.fromBlob(blob);
-		return new Cluster(el, segment);
-	}
-
-	public get referencedElement(): Promise<Cluster> {
-		return this.getReferencedElement();
-	}
 }
 
 export class CueRelativePosition extends ebml.UintElement {
@@ -108,9 +76,6 @@ export class CueRelativePosition extends ebml.UintElement {
 	public static readonly level = 4;
 	public static readonly displayName = "CueRelativePosition";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
-		super(element);
-	}
 }
 
 export class CueDuration extends ebml.UintElement {
@@ -118,7 +83,4 @@ export class CueDuration extends ebml.UintElement {
 	public static readonly level = 4;
 	public static readonly displayName = "CueDuration";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: CueTrackPositions) {
-		super(element);
-	}
 }

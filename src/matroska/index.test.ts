@@ -42,13 +42,13 @@ beforeAll(async () => {
 
 describe("Matroska Tests", () => {
 	test("creates a Matroska file", async () => {
-		const doc = await new ebml.Stream(file);
+		const doc = new ebml.Stream(file);
 		const mkv = new matroska.File(doc);
 		expect(mkv).toBeInstanceOf(matroska.File);
 	});
 
 	test("can dump the Matroska file to XML", async () => {
-		const doc = await new ebml.Stream(file);
+		const doc = new ebml.Stream(file);
 		const mkv = new matroska.File(doc);
 		const xml = await mkv.toXML();
 		expect(xml).toMatch(/^<EBMLHead/);
@@ -125,7 +125,7 @@ describe("Matroska edge cases", () => {
 		}
 
 		const frames: number[][] = [];
-		for await (const cluster of segments[0].seekClusters(0)) {
+		for await (const cluster of segments[0].clusters) {
 			for await (const block of cluster.simpleBlocks) {
 				for await (const frame of block.frames) {
 					frames.push(Array.from(frame));
@@ -154,7 +154,7 @@ describe("Matroska edge cases", () => {
 		}
 
 		const frames: number[][] = [];
-		for await (const cluster of segments[0].seekClusters(0)) {
+		for await (const cluster of segments[0].clusters) {
 			for await (const block of cluster.simpleBlocks) {
 				for await (const frame of block.frames) {
 					frames.push(Array.from(frame));

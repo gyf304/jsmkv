@@ -9,9 +9,6 @@ export class Seek extends ebml.SchemaElement {
 		return [SeekID, SeekPosition];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: SeekHead) {
-		super(element);
-	}
 
 	public get seekID(): Promise<SeekID> {
 		return this.one(SeekID);
@@ -28,9 +25,6 @@ export class SeekHead extends ebml.SchemaElement {
 	public static readonly displayName = "SeekHead";
 	public static readonly knownChildren = [Seek];
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get seeks(): AsyncGenerator<Seek> {
 		return this.many(Seek);
@@ -42,9 +36,6 @@ export class SeekID extends ebml.VintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "SeekID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Seek) {
-		super(element);
-	}
 }
 
 export class SeekPosition extends ebml.UintElement {
@@ -52,15 +43,15 @@ export class SeekPosition extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "SeekPosition";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Seek) {
-		super(element);
-	}
 
 	private async getReferencedElement(): Promise<ebml.SchemaElement> {
 		const position = await this.value;
-		const segment = this.parent.parent.parent;
+		const segment = this.parent?.parent?.parent as Segment | undefined;
+		if (segment === undefined) {
+			throw new Error("SeekPosition is not attached to a Segment");
+		}
 		const blob = segment.element.data.slice(position);
-		const el = await ebml.Element.fromBlob(blob);
+		const el = await ebml.Element.fromBlobLike(blob);
 		const elementTypes = [
 			SeekHead,
 			Info,
@@ -72,7 +63,7 @@ export class SeekPosition extends ebml.UintElement {
 		] as const;
 		for (const elementType of elementTypes) {
 			if (elementType.id === el.id.id) {
-				return new elementType(el, segment);
+				return new (elementType as any)(el, segment);
 			}
 		}
 		throw new Error(`Unknown element type ${el.id.toString()}, at position ${position}`);

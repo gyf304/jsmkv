@@ -9,9 +9,6 @@ export class Tracks extends ebml.SchemaElement {
 		return [TrackEntry];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Segment) {
-		super(element);
-	}
 
 	public get tracks(): AsyncGenerator<TrackEntry> {
 		return this.many(TrackEntry);
@@ -43,8 +40,9 @@ export class TrackEntry extends ebml.SchemaElement {
 		];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Tracks) {
-		super(element);
+
+	public get segment(): Segment {
+		return this.parent!.parent as Segment;
 	}
 
 	public get trackNumber() {
@@ -121,9 +119,6 @@ export class TrackNumber extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "TrackNumber";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class TrackUID extends ebml.UintElement {
@@ -131,9 +126,6 @@ export class TrackUID extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "TrackUID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 type TrackTypeValue = "video" | "audio" | "complex" | "logo" | "subtitle" | "buttons" | "control";
@@ -143,9 +135,6 @@ export class TrackType extends ebml.SchemaElement {
 	public static readonly displayName = "TrackType";
 	public static readonly leaf = true;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 
 	private async getValue(): Promise<TrackTypeValue> {
 		const data = await this.element.data.arrayBuffer();
@@ -184,9 +173,6 @@ export class Name extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "Name";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class DefaultDuration extends ebml.UintElement {
@@ -194,9 +180,6 @@ export class DefaultDuration extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "DefaultDuration";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class FlagLacing extends ebml.UintElement {
@@ -204,9 +187,6 @@ export class FlagLacing extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "FlagLacing";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class Language extends ebml.UTF8Element {
@@ -214,9 +194,6 @@ export class Language extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "Language";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class LanguageIETF extends ebml.UTF8Element {
@@ -224,9 +201,6 @@ export class LanguageIETF extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "LanguageIETF";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class FlagDefault extends ebml.UintElement {
@@ -234,9 +208,6 @@ export class FlagDefault extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "FlagDefault";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class FlagForced extends ebml.UintElement {
@@ -244,9 +215,6 @@ export class FlagForced extends ebml.UintElement {
 	public static readonly level = 3;
 	public static readonly displayName = "FlagForced";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class ContentEncodings extends ebml.SchemaElement {
@@ -258,9 +226,6 @@ export class ContentEncodings extends ebml.SchemaElement {
 	}
 	private cachedOrderedEncodings?: ContentEncoding[];
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 
 	public get contentEncodings(): AsyncGenerator<ContentEncoding> {
 		return this.many(ContentEncoding);
@@ -298,9 +263,6 @@ export class ContentEncoding extends ebml.SchemaElement {
 		];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncodings) {
-		super(element);
-	}
 
 	public get order() {
 		return this.maybeOne(ContentEncodingOrder).then(v => v?.value);
@@ -341,9 +303,6 @@ export class ContentEncodingOrder extends ebml.UintElement {
 	public static readonly level = 5;
 	public static readonly displayName = "ContentEncodingOrder";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
-		super(element);
-	}
 }
 
 const ContentEncodingScopeValues = ["block", "private", "next"] as const;
@@ -354,9 +313,6 @@ export class ContentEncodingScope extends ebml.EnumElement<typeof ContentEncodin
 	public static readonly displayName = "ContentEncodingScope";
 	public static readonly values = ContentEncodingScopeValues;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
-		super(element);
-	}
 }
 
 const ContentEncodingTypeValues = ["compression", "encryption"] as const;
@@ -366,9 +322,6 @@ export class ContentEncodingType extends ebml.EnumElement<typeof ContentEncoding
 	public static readonly displayName = "ContentEncodingType";
 	public static readonly values = ContentEncodingTypeValues;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
-		super(element);
-	}
 }
 
 export class ContentCompression extends ebml.SchemaElement {
@@ -379,9 +332,6 @@ export class ContentCompression extends ebml.SchemaElement {
 		return [ContentCompAlgo, ContentCompSettings];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
-		super(element);
-	}
 
 	public get algo() {
 		return this.one(ContentCompAlgo).then(v => v.value);
@@ -413,9 +363,6 @@ export class ContentCompAlgo extends ebml.EnumElement<typeof ContentCompAlgoValu
 	public static readonly displayName = "ContentCompAlgo";
 	public static readonly values = ContentCompAlgoValues;
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
-		super(element);
-	}
 }
 
 export class ContentCompSettings extends ebml.BytesElement {
@@ -423,9 +370,6 @@ export class ContentCompSettings extends ebml.BytesElement {
 	public static readonly level = 6;
 	public static readonly displayName = "ContentCompSettings";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentCompression) {
-		super(element);
-	}
 }
 
 export class ContentEncryption extends ebml.SchemaElement {
@@ -436,9 +380,6 @@ export class ContentEncryption extends ebml.SchemaElement {
 		return [];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: ContentEncoding) {
-		super(element);
-	}
 }
 
 export class CodecID extends ebml.UTF8Element {
@@ -446,9 +387,6 @@ export class CodecID extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "CodecID";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class CodecPrivate extends ebml.BytesElement {
@@ -456,9 +394,6 @@ export class CodecPrivate extends ebml.BytesElement {
 	public static readonly level = 3;
 	public static readonly displayName = "CodecPrivate";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class CodecName extends ebml.UTF8Element {
@@ -466,22 +401,16 @@ export class CodecName extends ebml.UTF8Element {
 	public static readonly level = 3;
 	public static readonly displayName = "CodecName";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 }
 
 export class Video extends ebml.SchemaElement {
 	public static readonly id = 0xe0;
-	public static readonly level = 4;
+	public static readonly level = 3;
 	public static readonly displayName = "Video";
 	public static get knownChildren() {
 		return [PixelWidth, PixelHeight, DisplayWidth, DisplayHeight];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 
 	public get pixelWidth() {
 		return this.one(PixelWidth).then(v => v.value);
@@ -502,55 +431,40 @@ export class Video extends ebml.SchemaElement {
 
 export class PixelWidth extends ebml.UintElement {
 	public static readonly id = 0xb0;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "PixelWidth";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
-		super(element);
-	}
 }
 
 export class PixelHeight extends ebml.UintElement {
 	public static readonly id = 0xba;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "PixelHeight";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
-		super(element);
-	}
 }
 
 export class DisplayWidth extends ebml.UintElement {
 	public static readonly id = 0x54b0;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "DisplayWidth";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
-		super(element);
-	}
 }
 
 export class DisplayHeight extends ebml.UintElement {
 	public static readonly id = 0x54ba;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "DisplayHeight";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Video) {
-		super(element);
-	}
 }
 
 class Audio extends ebml.SchemaElement {
 	public static readonly id = 0xe1;
-	public static readonly level = 4;
+	public static readonly level = 3;
 	public static readonly displayName = "Audio";
 	public static get knownChildren() {
 		return [SamplingFrequency, Channels, BitDepth];
 	}
 
-	constructor(public readonly element: ebml.Element, public readonly parent: TrackEntry) {
-		super(element);
-	}
 
 	public get samplingFrequency() {
 		return this.one(SamplingFrequency).then(v => v.value);
@@ -567,30 +481,21 @@ class Audio extends ebml.SchemaElement {
 
 export class SamplingFrequency extends ebml.FloatElement {
 	public static readonly id = 0xb5;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "SamplingFrequency";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
-		super(element);
-	}
 }
 
 export class Channels extends ebml.UintElement {
 	public static readonly id = 0x9f;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "Channels";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
-		super(element);
-	}
 }
 
 export class BitDepth extends ebml.UintElement {
 	public static readonly id = 0x6264;
-	public static readonly level = 5;
+	public static readonly level = 4;
 	public static readonly displayName = "BitDepth";
 
-	constructor(public readonly element: ebml.Element, public readonly parent: Audio) {
-		super(element);
-	}
 }
